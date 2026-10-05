@@ -378,8 +378,8 @@ async def on_message(message):
             user_status = None
             current_quiz_junior_high = None
         else:
-            await message.channel.send(">_< 不正解です。もう一度挑戦してみてください！")
-            await message.channel.send(f'💡 【ヒント】\n{quiz_data["hint"]}')
+            await message.channel.send(" 不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！")
+            await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
 
     # 🎯 3. 一般知識クイズ解答判定
