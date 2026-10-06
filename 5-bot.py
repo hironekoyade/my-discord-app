@@ -291,36 +291,6 @@ async def on_message(message):
         await message.channel.send("🛑 クイズ・メニュー選択を中断してリセットしました！")
         return
 
-    # 🎯 4. 中学クイズ解答判定（本当のシステムに合わせて修正完了！）
-    if user_status == "quiz_active" and current_quiz_junior_high is not None:
-        # すでに変数の中にデータが入っているので、そのまま quiz_data に渡す
-        quiz_data = current_quiz_junior_high
-        
-        is_correct = False
-        if isinstance(quiz_data["answer"], list):
-            if message.content in quiz_data["answer"]:
-                is_correct = True
-        else:
-            if message.content == quiz_data["answer"]:
-                is_correct = True
-
-        # スコアを保存するためのユーザーIDと箱の準備
-        user_id = message.author.id
-        if user_id not in user_scores:
-            user_scores[user_id] = {"correct": 0, "wrong": 0}
-
-        if is_correct:
-            user_scores[user_id]["correct"] += 1  # 正解スコアを+1
-            await message.channel.send("<a:marugame:1556977377601527920> ⭕ 正解！お見事です！ 🎉")
-            await message.channel.send(f'💡 【解説】 \n{quiz_data["explanation"]}')
-            current_quiz_junior_high = None  
-            user_status = None  # クイズ状態を終了する
-        else:
-            user_scores[user_id]["wrong"] += 1    # 不正解スコアを+1
-            await message.channel.send(" 不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！")
-            await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】 \n{quiz_data["hint"]}')
-        return
-    
     # 🎯 3. 一般知識クイズ解答判定
     if current_quiz is not None:
         quiz_data = quiz_dictionary[current_quiz]
