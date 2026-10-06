@@ -14,15 +14,16 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 
 # ==========================================
-# 📊 状態管理変数
+# 📊 状態管理変数（不足していた学年変数を追加！）
 # ==========================================
 current_quiz = None             
 current_quiz_junior_high = None 
 
 user_status = None 
+selected_grade = None    # 💡 これを新しく書き足してください！
 selected_subject = None         
 selected_range = None    
-selected_content = None  
+selected_content = None    
 
 # ==========================================
 # 📚 クイズデータ（学年対応版）
@@ -290,81 +291,11 @@ async def on_message(message):
         await message.channel.send("🛑 クイズ・メニュー選択を中断してリセットしました！")
         return
 
-    # 🔄 2. 中学生クイズのフロー
-    # ✨ 【新設】学年選択の判定
-    if user_status == "select_grade":
-        grades = list(quiz_junior_high_school.keys())
-        if message.content in grades:
-            selected_grade = message.content
-            user_status = "select_subject"
-            subjects = list(quiz_junior_high_school[selected_grade].keys())
-            if not subjects:
-                await message.channel.send(f"❌ 現在、{selected_grade}には教科がありません。")
-                user_status = None
-                return
-            subject_text = "・".join(subjects)
-            await message.channel.send(f"**どの教科にしますか？**\n{subject_text} から選んでください。")
-        else:
-            await message.channel.send("選択肢にある学年を正しく入力してください。")
-        return
-
-    elif user_status == "select_subject":
-        # 🔄 quiz_junior_high_school[selected_grade] から取得するように変更
-        subjects = list(quiz_junior_high_school[selected_grade].keys())
-        if message.content in subjects:
-            selected_subject = message.content
-            user_status = "select_range"
-            # 🔄 階層の指定に [selected_grade] を追加
-            ranges = list(quiz_junior_high_school[selected_grade][selected_subject].keys())
-            if not ranges:
-                await message.channel.send(f"❌ 現在、{selected_subject}には範囲がありません。")
-                user_status = None
-                return
-            range_text = "・".join(ranges)
-            await message.channel.send(f"**範囲はどうしますか？**\n{range_text} から選んでください。")
-        else:
-            await message.channel.send("選択肢にある教科を正しく入力してください。")
-        return
-
-    elif user_status == "select_range":
-        # 🔄 階層の指定に [selected_grade] を追加
-        ranges = list(quiz_junior_high_school[selected_grade][selected_subject].keys())
-        if message.content in ranges:
-            selected_range = message.content
-            user_status = "select_content"
-            # 🔄 階層の指定に [selected_grade] を追加
-            contents = list(quiz_junior_high_school[selected_grade][selected_subject][selected_range].keys())
-            if not contents:
-                await message.channel.send(f"❌ 現在、{selected_range}には内容がありません。")
-                user_status = None
-                return
-            content_text = "、".join(contents)
-            await message.channel.send(f"**内容はどれにしますか？**\n{content_text} から選んでください。")
-        else:
-            await message.channel.send("選択肢にある範囲を正しく入力してください。")
-        return
-
-    elif user_status == "select_content":
-        # 🔄 階層の指定に [selected_grade] を追加
-        contents = list(quiz_junior_high_school[selected_grade][selected_subject][selected_range].keys())
-        if message.content in contents:
-            selected_content = message.content
-            # 🔄 階層の指定に [selected_grade] を追加
-            questions = quiz_junior_high_school[selected_grade][selected_subject][selected_range][selected_content]
-            if not questions:
-                await message.channel.send(f"❌ 現在、{selected_content}には問題がありません。")
-                user_status = None
-                return
-            chosen_question = random.choice(list(questions.keys()))
-            current_quiz_junior_high = questions[chosen_question]
-            user_status = "quiz_active"  
-            await message.channel.send(f"では、ランダムに問題を出します。\n\n**問題：{chosen_question}**")
-        else:
-            await message.channel.send("選択肢にある内容を正しく入力してください。")
-        return
-
-    elif user_status == "quiz_active" and current_quiz_junior_high is not None:
+    # 🎯 4. 中学クイズ解答判定（本当のシステムに合わせて修正完了！）
+    if user_status == "quiz_active" and current_quiz_junior_high is not None:
+        # すでに変数の中にデータが入っているので、そのまま quiz_data に渡す
         quiz_data = current_quiz_junior_high
+        
         is_correct = False
         if isinstance(quiz_data["answer"], list):
             if message.content in quiz_data["answer"]:
@@ -373,30 +304,23 @@ async def on_message(message):
             if message.content == quiz_data["answer"]:
                 is_correct = True
 
-    # 現在のスコアを確認するコマンド
-    if message.content == "!quiz_score":
+        # スコアを保存するためのユーザーIDと箱の準備
         user_id = message.author.id
-        
-        # まだ一度もクイズを解いたことがない人のための処理
         if user_id not in user_scores:
-            await message.channel.send(f"📊 **{message.author.name} さんのクイズ成績**\nまだクイズに挑戦していません！まずは問題を解いてみてね。")
-            return
-            
-        correct = user_scores[user_id]["correct"]
-        wrong = user_scores[user_id]["wrong"]
-        total = correct + wrong
-        
-        # 正解率の計算（1回も解いていない場合の0除算エラーを防止）
-        rate = (correct / total * 100) if total > 0 else 0
-        
-        # Discordのチャットにスコアを送信
-        await message.channel.send(
-            f"📊 **{message.author.name} さんのクイズ成績**\n"
-            f"⭕ 正解数: {correct} 回\n"
-            f"❌ 不正解数: {wrong} 回\n"
-            f"📈 正解率: {rate:.1f} %"
-        )
+            user_scores[user_id] = {"correct": 0, "wrong": 0}
 
+        if is_correct:
+            user_scores[user_id]["correct"] += 1  # 正解スコアを+1
+            await message.channel.send("<a:marugame:1556977377601527920> ⭕ 正解！お見事です！ 🎉")
+            await message.channel.send(f'💡 【解説】 \n{quiz_data["explanation"]}')
+            current_quiz_junior_high = None  
+            user_status = None  # クイズ状態を終了する
+        else:
+            user_scores[user_id]["wrong"] += 1    # 不正解スコアを+1
+            await message.channel.send(" 不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！")
+            await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】 \n{quiz_data["hint"]}')
+        return
+    
     # 🎯 3. 一般知識クイズ解答判定
     if current_quiz is not None:
         quiz_data = quiz_dictionary[current_quiz]
