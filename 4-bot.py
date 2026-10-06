@@ -395,11 +395,11 @@ async def on_message(message):
 
         if is_correct:
             await message.channel.send("⭕ 正解！お見事です（一般知識）！🎉")
-            await message.channel.send(f'💡 【解説】\n{quiz_data["explanation"]}')
+            await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data["explanation"]}')
             current_quiz = None  
         else:
-            await message.channel.send(">_< 不正解です。もう一度挑戦してみてください！")
-            await message.channel.send(f'💡 【ヒント】\n{quiz_data["hint"]}')
+            await message.channel.send("不正解です。<:hint:1556661937356546069> もう一度挑戦してみてください！")
+            await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
 
     # 🚀 4. コマンド受付
