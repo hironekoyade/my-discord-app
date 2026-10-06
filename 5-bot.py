@@ -373,25 +373,29 @@ async def on_message(message):
             if message.content == quiz_data["answer"]:
                 is_correct = True
 
-    if is_correct:
+    # 現在のスコアを確認するコマンド
+    if message.content == "!quiz_score":
         user_id = message.author.id
+        
+        # まだ一度もクイズを解いたことがない人のための処理
         if user_id not in user_scores:
-            user_scores[user_id] = {"correct": 0, "wrong": 0}
-
-        await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です！🎉")
-        await message.channel.send(f'💡 【解説】 \n{quiz_data["explanation"]}')
-        user_status = None
-        current_quiz_junior_high = None
-        user_scores[user_id]["correct"] += 1
-    else:
-        user_id = message.author.id
-        if user_id not in user_scores:
-            user_scores[user_id] = {"correct": 0, "wrong": 0}
-        user_scores[user_id]["wrong"] += 1
-
-        await message.channel.send(" 不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！")
-        await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】 \n{quiz_data["hint"]}')
-        return
+            await message.channel.send(f"📊 **{message.author.name} さんのクイズ成績**\nまだクイズに挑戦していません！まずは問題を解いてみてね。")
+            return
+            
+        correct = user_scores[user_id]["correct"]
+        wrong = user_scores[user_id]["wrong"]
+        total = correct + wrong
+        
+        # 正解率の計算（1回も解いていない場合の0除算エラーを防止）
+        rate = (correct / total * 100) if total > 0 else 0
+        
+        # Discordのチャットにスコアを送信
+        await message.channel.send(
+            f"📊 **{message.author.name} さんのクイズ成績**\n"
+            f"⭕ 正解数: {correct} 回\n"
+            f"❌ 不正解数: {wrong} 回\n"
+            f"📈 正解率: {rate:.1f} %"
+        )
 
     # 🎯 3. 一般知識クイズ解答判定
     if current_quiz is not None:
@@ -491,6 +495,7 @@ async def on_message(message):
                             "`!サイコロ 2 3`のように振る回数も指定できるよ!\n"
                             "• `!ランダムに州を選んで` : 世界の6大州をランダムに選択\n"
                             "• `!こんにちは` / `!おはよう` / `!こんばんは` / `!おやすみ`"
+                            "• `!quiz_score` : クイズのスコアを表示！\n"
                         ),
                 inline=False
         )
