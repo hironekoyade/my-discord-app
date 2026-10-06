@@ -373,7 +373,7 @@ async def on_message(message):
                 is_correct = True
 
         if is_correct:
-            await message.channel.send("⭕ 正解！お見事です！🎉")
+            await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です！🎉")
             await message.channel.send(f'💡 【解説】\n{quiz_data["explanation"]}')
             user_status = None
             current_quiz_junior_high = None
@@ -394,7 +394,7 @@ async def on_message(message):
                 is_correct = True
 
         if is_correct:
-            await message.channel.send("⭕ 正解！お見事です（一般知識）！🎉")
+            await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です（一般知識）！🎉")
             await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data["explanation"]}')
             current_quiz = None  
         else:
