@@ -398,7 +398,7 @@ async def on_message(message):
             await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data["explanation"]}')
             current_quiz = None  
         else:
-            await message.channel.send("不正解です。<:hint:1556661937356546069> もう一度挑戦してみてください！")
+            await message.channel.send("不正解です。<:oh_no:1556661209116184686> もう一度挑戦してみてください！")
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
 
