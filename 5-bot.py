@@ -408,11 +408,18 @@ async def on_message(message):
             if message.content == quiz_data["answer"]:
                 is_correct = True
 
+        # スコアを保存するためのユーザーIDと箱の準備
+        user_id = message.author.id
+        if user_id not in user_scores:
+            user_scores[user_id] = {"correct": 0, "wrong": 0}
+
         if is_correct:
+            user_scores[user_id]["correct"] += 1  # 正解スコアを+1
             await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です（一般知識）！🎉")
             await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data["explanation"]}')
             current_quiz = None  
         else:
+            user_scores[user_id]["wrong"] += 1    # 不正解スコアを+1
             await message.channel.send("不正解です。<:oh_no:1556661209116184686> もう一度挑戦してみてください！")
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
