@@ -4,7 +4,7 @@ venv/
 .venv/
 .cache/
 .vscode/
-1-bot.py/
-2-bot.py/
-3-bot.py/
-4-bot.py/
+1-bot.py
+2-bot.py
+3-bot.py
+4-bot.py
