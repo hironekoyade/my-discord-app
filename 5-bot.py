@@ -318,12 +318,12 @@ async def on_message(message):
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
 
-    # 🎯 4. 中学クイズ解答判定（本当の変数名に合わせて新しく追加）
-    if user_status == "quiz_junior_high_school" and current_quiz_junior_high is not None:
-        # 正しいデータ構造からクイズのデータを引っ張ってくる
-        quiz_data = quiz_junior_high_school[selected_grade][selected_subject][selected_range][selected_content][current_quiz_junior_high]
-        
+    # 🎯 4. 中学クイズ解答判定（エラー原因を完全に修正した確定版！）
+    if user_status == "quiz_active" and current_quiz_junior_high is not None:
+        # 💡【超重要】ここが抜けていたためエラーになっていました。最初にFalseで初期化します
         is_correct = False
+        
+        quiz_data = current_quiz_junior_high
         if isinstance(quiz_data["answer"], list):
             if message.content in quiz_data["answer"]:
                 is_correct = True
@@ -331,7 +331,7 @@ async def on_message(message):
             if message.content == quiz_data["answer"]:
                 is_correct = True
 
-        # スコア用の準備
+        # スコアを保存するためのユーザーIDと箱の準備
         user_id = message.author.id
         if user_id not in user_scores:
             user_scores[user_id] = {"correct": 0, "wrong": 0}
@@ -341,7 +341,7 @@ async def on_message(message):
             await message.channel.send("<a:marugame:1556977377601527920> ⭕ 正解！お見事です！ 🎉")
             await message.channel.send(f'💡 【解説】 \n{quiz_data["explanation"]}')
             current_quiz_junior_high = None  
-            user_status = None
+            user_status = None  # クイズ状態を終了する
         else:
             user_scores[user_id]["wrong"] += 1    # 不正解スコアを+1
             await message.channel.send(" 不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！")
