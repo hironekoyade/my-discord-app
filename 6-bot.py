@@ -451,6 +451,25 @@ async def on_message(message):
         await message.channel.send(chosen_quiz)
         return
 
+    if message.content == "!quiz_score":
+        user_id = message.author.id
+        if user_id in user_scores:
+            correct = user_scores[user_id].get("correct", 0)
+            wrong = user_scores[user_id].get("wrong", 0)
+            total = correct + wrong
+            # 正答率の計算（0除算対策）
+            rate = (correct / total * 100) if total > 0 else 0
+            
+            await message.channel.send(
+                f"📊 **{message.author.display_name} さんのクイズ成績**\n"
+                f"• 正解数: {correct} 回 ⭕\n"
+                f"• 不正解数: {wrong} 回 ❌\n"
+                f"• 正答率: {rate:.1f} %"
+            )
+        else:
+            await message.channel.send(f"📊 {message.author.display_name} さんは、まだクイズに挑戦していません！")
+        return
+    
     # 📋 6. ヘルプ機能
     if message.content == "!help-hironekobot":
         quiz_menu_text = ""

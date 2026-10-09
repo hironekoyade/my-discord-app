@@ -343,7 +343,7 @@ async def on_message(message):
             current_quiz_junior_high = None  
             user_status = None  # クイズ状態を終了する
         else:
-            user_scores[user_id]["wrong"] += 1    # 不正解スコアを+1
+            user_scores[user_id]["wrong"] += 1    #git 不正解スコアを+1
             await message.channel.send(" 不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！")
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】 \n{quiz_data["hint"]}')
         return
