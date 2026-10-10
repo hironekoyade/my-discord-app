@@ -517,7 +517,7 @@ async def on_message(message):
         # 💡 【構文を変えずに追加】管理者向け項目のフィールド
         embed.add_field(
             name="🛠️ 管理者向け機能",
-            value="• `!github-repositories` : 開発用GitHubリポジトリのURLを確認する",
+            value="• `!github-repositories` : 開発用GitHubリポジトリのURLを確認する(管理者のみ)",
             inline=False
         )
         
