@@ -525,6 +525,24 @@ async def on_message(message):
         await message.channel.send(embed=embed)
         return
 
+    # 🛠️ 管理者専用：GitHubリポジトリ確認コマンド
+    if message.content == "!github-repositories":
+        # 💡 【重要】ここに先ほどコピーしたあなたの「18桁の数字のID」を直接貼り付けてください
+        # ※数字なので、前後にクォーテーション（"" や ''）は付けなくて大丈夫です。
+        ADMIN_USER_ID = [
+            1385634725460316273,  # あなたのID
+            1551496753088561238,  # 2人目のID
+            1188811877447372881,   # 3人目のID（何人でも増やせます）
+        ]
+        
+        # メッセージを送ってきた人のIDが、管理者IDと一致するかチェック
+        if message.author.id == ADMIN_USER_ID:
+            await message.channel.send("リポジトリです。https://github.com")
+        else:
+            # 管理者以外が打った場合は、URLを隠して警告を出す
+            await message.channel.send("❌ このコマンドはBotの管理者のみが実行できます。")
+        return
+
     # 🎲 7. サイコロ機能
     if message.content.startswith("!サイコロ"):
         args = message.content.split()
