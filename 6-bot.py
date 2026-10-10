@@ -590,6 +590,9 @@ async def on_message(message):
         state = ["オセアニア州！", "アフリカ州！", "アジア州！", "ヨーロッパ州！", "北アメリカ州！", "南アメリカ州！"]
         await message.channel.send(random.choice(state))
         return
+    elif message.content == "!github-repositories":
+        await message.channel.send("リポジトリです。https://github.com/hironekoyade/my-discord-app")
+        return
 
 @client.event
 async def on_ready():
