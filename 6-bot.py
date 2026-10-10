@@ -257,6 +257,58 @@ quiz_junior_high_school = {
         }
     }
 }
+# ==========================================
+# 🎓 学術特化クイズデータ（日韓近代政治史）
+# ==========================================
+quiz_academic = {
+    "韓国近代史": {
+        "1979年の朴正煕暗殺後の権力の空白期に、全斗煥を中心とする新軍部が実権を握る契機となった、映画「ソウルの春」のテーマにもなった軍事クーデターは何？": {
+            "type": "text", # テキスト入力形式
+            "answer": ["12.12軍事反乱", "12月12日軍事クーデター", "12.12軍事クーデター", "12.12"],
+            "explanation": "1979年12月12日、戒厳司令官の逮捕を強行し、新軍部が軍の主導権を掌握した事件です。後に大統領となる全斗煥や盧泰愚が中心となりました。",
+            "hint": "日付がそのまま事件の名前になっています！「〇・〇軍事反乱」など。"
+        },
+        "1987年、パク・ジョンチョル（朴鍾哲）の拷問致死事件などをきっかけに、大統領直接選挙制を勝ち取るへとつながった一連の民主化運動を何というか？": {
+            "type": "choice", # 4択ボタン形式
+            "options": ["四月革命", "光州事件（五・一八民衆抗争）", "六月民主抗争", "釜馬民主抗争"],
+            "answer": "六月民主抗争", # optionsの中の正解の文字列
+            "explanation": "1987年6月に全国で激化した民主化運動です。全斗煥政権は屈服し、盧泰愚による「民主化宣言（6.29宣言）」によって大統領の直接選挙制が実現しました。",
+            "hint": "映画「1987、ある闘いの真実」の舞台となった、初夏の熱い民主化運動です。"
+        }
+    },
+    "日本近代史": {
+        "1889年に発布され、大日本帝国における天皇の大権と臣民の権利を定めた、東アジア初の近代的な成文憲法は何？": {
+            "type": "text",
+            "answer": ["大日本帝国憲法", "明治憲法"],
+            "explanation": "伊藤博文らが中心となり、ドイツ（プロイセン）の憲法を参考に起草されました。アジアで最初の近代的な立憲君主制の基盤となりました。",
+            "hint": "通称「明治憲法」とも呼ばれる、戦前の日本の憲法です。"
+        },
+        "1918年、シベリア出兵による買い占めで米価が暴走したことをきっかけに富山県から始まり、時の寺内正毅内閣を退陣に追い込んだ民衆暴動は何？": {
+            "type": "choice",
+            "options": ["秩父事件", "米騒動", "日比谷焼き打ち事件", "血盟団事件"],
+            "answer": "米騒動",
+            "explanation": "富山県の漁村の主婦たちが米の移出に抗議したことから全国に飛び火し、軍隊が出動するほどの大規模な暴動に発展しました。結果、本格的な政党内閣（原敬内閣）が誕生します。",
+            "hint": "主食である「米」の価格高騰に怒った人々が起こした大騒動です。"
+        }
+    }
+}
+class AcademicQuizView(discord.ui.View):
+    def __init__(self, correct_answer, explanation):
+        super().__init__(timeout=60.0) # 60秒でタイムアウト
+        self.correct_answer = correct_answer
+        self.explanation = explanation
+
+    # ボタンが押されたときの共通処理
+    async def process_choice(self, interaction: discord.Interaction, chosen: str):
+        if chosen == self.correct_answer:
+            await interaction.response.send_message(
+                f"<a:marugame:1556977377601527920> **正解！お見事です！** 🎉\n\n💡 【解説】\n{self.explanation}"
+            )
+            self.stop() # ボタンを無効化
+        else:
+            await interaction.response.send_message(
+                "❌ **不正解です...** もう一度考えてみてください！", ephemeral=True # 本人にだけ見えるメッセージ
+            )
 
 x, h = sp.symbols('x h')
 f = x**2
@@ -472,6 +524,55 @@ async def on_message(message):
         return
 
     # 🚀 5. コマンド受付
+        # 🚀 学術特化クイズコマンド
+    if message.content == "!学術クイズ":
+        # 1. 登録されているデータから完全にランダムで1問選ぶ
+        all_academic_q = []
+        for category, questions in quiz_academic.items():
+            for q_text, q_data in questions.items():
+                all_academic_q.append({"text": q_text, "data": q_data, "category": category})
+        
+        chosen = random.choice(all_academic_q)
+        q_text = chosen["text"]
+        q_data = chosen["data"]
+        
+        # 2. クイズの形式（タイプ）によって処理を分ける！
+        if q_data["type"] == "choice":
+            # 【4択ボタン方式】
+            view = AcademicQuizView(q_data["answer"], q_data["explanation"])
+            
+            # ランダムに並び替えた選択肢ボタンをViewに追加
+            options = q_data["options"].copy()
+            random.shuffle(options)
+            
+            for opt in options:
+                # ボタンを作って、押されたら設定した文字を返すようにする
+                button = discord.ui.Button(label=opt, style=discord.ButtonStyle.primary)
+                
+                # クロージャを使ってボタンごとに異なる文字を渡す
+                async def make_callback(choice_str=opt):
+                    async def callback(interaction: discord.Interaction):
+                        await view.process_choice(interaction, choice_str)
+                    return callback
+                
+                button.callback = await make_callback()
+                view.add_item(button)
+            
+            await message.channel.send(
+                f"🎓 **【学術クイズ - {chosen['category']}】**（4択ボタン形式）\n\n**問題：{q_text}**", 
+                view=view
+            )
+            return
+
+        elif q_data["type"] == "text":
+            # 【テキスト入力方式】
+            current_quiz_junior_high = q_data
+            user_status = "quiz_active"
+            
+            await message.channel.send(
+                f"🎓 **【学術クイズ - {chosen['category']}】**（テキスト入力形式）\n\n**問題：{q_text}**"
+            )
+            return
     if message.content == "!中学クイズ":
         user_status = "select_grade"
         grade_text = "・".join(quiz_junior_high_school.keys())
@@ -582,19 +683,17 @@ async def on_message(message):
 
     # 🛠️ 管理者専用：GitHubリポジトリ確認コマンド
     if message.content == "!github-repositories":
-        # 💡 【重要】ここに先ほどコピーしたあなたの「18桁の数字のID」を直接貼り付けてください
-        # ※数字なので、前後にクォーテーション（"" や ''）は付けなくて大丈夫です。
         ADMIN_USER_ID = [
-            1385634725460316273,  # あなたのID
-            1551496753088561238,  # 2人目のID
-            1188811877447372881,   # 3人目のID（何人でも増やせます）
+            1385634725460316273,  
+            1551496753088561238,  
+            1188811877447372881,   
         ]
         
-        # メッセージを送ってきた人のIDが、管理者IDと一致するかチェック
-        if message.author.id == ADMIN_USER_ID:
+        # == ではなく「in」を使うことで、リスト内の誰かに一致するかチェックできます
+        if message.author.id in ADMIN_USER_ID:
+            # 本当のURLをここに書く
             await message.channel.send("リポジトリです。https://github.com")
         else:
-            # 管理者以外が打った場合は、URLを隠して警告を出す
             await message.channel.send("❌ このコマンドはBotの管理者のみが実行できます。")
         return
 
@@ -670,9 +769,6 @@ async def on_message(message):
         await message.channel.send("州をランダムに選びます！選ばれたのは...")
         state = ["オセアニア州！", "アフリカ州！", "アジア州！", "ヨーロッパ州！", "北アメリカ州！", "南アメリカ州！"]
         await message.channel.send(random.choice(state))
-        return
-    elif message.content == "!github-repositories":
-        await message.channel.send("リポジトリです。https://github.com/hironekoyade/my-discord-app")
         return
 
 @client.event
