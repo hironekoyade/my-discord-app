@@ -1,6 +1,7 @@
 import os
 import random
 import discord
+import sympy as sp
 
 user_scores = {}
 
@@ -213,6 +214,11 @@ quiz_junior_high_school = {
     }
 }
 
+x, h = sp.symbols('x h')
+f = x**2
+definition_expr = (f.subs(x, x + h) - f) / h
+derivative = sp.limit(definition_expr, h, 0)
+
 # 【一般知識】クイズの辞書
 quiz_dictionary = {
     "0831→1964→2015→1345→?": {
@@ -264,6 +270,11 @@ quiz_dictionary = {
         "answer": ["10人の小さな兵隊さん", "Ten Little Soldier Boys"],
         "explanation": "童謡になぞらえて、登場人物たちが次々と殺害されていくミステリー小説です。",
         "hint": "元となった詩の名前は「Ten Little Indians」です。",
+    },
+    "f(x)=x^2の導関数は？":{
+        "answer":["f'(x)=2x","dy/dx=2x"],
+        "explanation": f"導関数の定義から計算した結果、{derivative} になります。",
+        "hint":"導関数の定義から考えましょう。",
     },
 }
 
