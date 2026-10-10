@@ -455,7 +455,7 @@ async def on_message(message):
         await message.channel.send(f"🎲 すべての範囲からランダムに問題を出します！\n💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**")
         return
 
-    if message.content == "!なんかクイズ出して":
+    if message.content == "!一般クイズ":
         await message.channel.send("【一般知識クイズ】を出します！")
         chosen_quiz = random.choice(list(quiz_dictionary.keys()))
         current_quiz = chosen_quiz
@@ -513,7 +513,7 @@ async def on_message(message):
         embed.add_field(
             name="🎲 その他の機能",
             value=(
-                "• `!なんかクイズ出して` : 一般知識クイズに挑戦\n"
+                "• `!一般クイズ` : 一般知識クイズに挑戦\n"
                 "• `!今日の運勢` : 今日の運勢を占う!\n"
                 "• `!明日の運勢` : 明日の運勢を占う!!\n"
                 "• `!サイコロ` : サイコロを振る `!サイコロ 100`のように上限を指定できるよ！\n"
