@@ -303,14 +303,19 @@ quiz_academic = {
     },
 }
 
-# 1. まずボタンの定義（これが上）
+# ==========================================
+# 💡 ボタンコンポーネントクラスを定義
+# ==========================================
 class AcademicQuizButton(discord.ui.Button):
-    def __init__(self, label, view_obj):
-        super().__init__(label=label, style=discord.ButtonStyle.primary)
+    # 💡 ここで新しく「style（色）」も一緒に受け取るように変更！
+    def __init__(self, label, view_obj, style):
+        super().__init__(label=label, style=style) # 💡 固定の青ではなく、受け取った色で作る！
         self.view_obj = view_obj
 
     async def callback(self, interaction: discord.Interaction):
         await self.view_obj.process_choice(interaction, self.label)
+
+
 class AcademicQuizView(discord.ui.View):
     def __init__(self, correct_answer, explanation, options):
         super().__init__(timeout=60.0) 
@@ -330,12 +335,10 @@ class AcademicQuizView(discord.ui.View):
         
         # enumerateを使って、選択肢と色を1つずつペアにして取り出す
         for i, opt in enumerate(shuffled_options):
-            # 4つの色から順番に割り当てる
             current_style = button_styles[i % 4]
             
-            # ボタンを作ってViewに追加する
-            btn = AcademicQuizButton(label=opt, view_obj=self)
-            btn.style = current_style # ここでボタンの色を上書き指定！
+            # 💡 ボタンを作るときに、引数として「色（current_style）」を直接渡す！
+            btn = AcademicQuizButton(label=opt, view_obj=self, style=current_style)
             self.add_item(btn)
 
 x, h = sp.symbols('x h')
