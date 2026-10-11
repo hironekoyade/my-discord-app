@@ -295,7 +295,7 @@ quiz_academic = {
     }
 }
 
-# 💡 ボタンコンポーネントクラスを定義
+# 1. まずボタンの定義（これが上）
 class AcademicQuizButton(discord.ui.Button):
     def __init__(self, label, view_obj):
         super().__init__(label=label, style=discord.ButtonStyle.primary)
@@ -303,7 +303,6 @@ class AcademicQuizButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await self.view_obj.process_choice(interaction, self.label)
-
 class AcademicQuizView(discord.ui.View):
     def __init__(self, correct_answer, explanation, options):
         super().__init__(timeout=60.0) 
@@ -312,25 +311,24 @@ class AcademicQuizView(discord.ui.View):
         
         shuffled_options = options.copy()
         random.shuffle(shuffled_options)
-        for opt in shuffled_options:
-            self.add_item(AcademicQuizButton(label=opt, view_obj=self))
-
-    async def process_choice(self, interaction: discord.Interaction, chosen: str):
-        user_id = interaction.user.id
-        if user_id not in user_scores:
-            user_scores[user_id] = {"correct": 0, "wrong": 0}
-
-        if chosen == self.correct_answer:
-            user_scores[user_id]["correct"] += 1
-            await interaction.response.send_message(
-                f"<a:marugame:1556977377601527920> **正解！お見事です！** 🎉\n\n💡 【解説】\n{self.explanation}"
-            )
-            self.stop() 
-        else:
-            user_scores[user_id]["wrong"] += 1
-            await interaction.response.send_message(
-                "❌ **不正解です...** もう一度考えてみてください！", ephemeral=True 
-            )
+        
+        # 🎨 4つのボタンに別々の色（スタイル）を用意する
+        button_styles = [
+            discord.ButtonStyle.primary,   # 青
+            discord.ButtonStyle.success,   # 緑
+            discord.ButtonStyle.secondary, # グレー
+            discord.ButtonStyle.danger     # 赤
+        ]
+        
+        # enumerateを使って、選択肢と色を1つずつペアにして取り出す
+        for i, opt in enumerate(shuffled_options):
+            # 4つの色から順番に割り当てる
+            current_style = button_styles[i % 4]
+            
+            # ボタンを作ってViewに追加する
+            btn = AcademicQuizButton(label=opt, view_obj=self)
+            btn.style = current_style # ここでボタンの色を上書き指定！
+            self.add_item(btn)
 
 x, h = sp.symbols('x h')
 f = x**2
