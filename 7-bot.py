@@ -453,17 +453,7 @@ def update_db_score(user_id: int, username: str, is_correct: bool):
     except Exception as e:
         print(f"Supabase書き込みエラー: {e}")
 
-# ==========================================
-# 📩 メッセージ受信イベント
-# ==========================================
-@client.event
-async def on_message(message):
-    global current_quiz, current_quiz_junior_high, current_quiz_academic
-    global user_status, selected_grade, selected_subject, selected_range, selected_content
-
-    if message.author == client.user:
-        return
-    
+# 💡 ここからが正しい連動になります
 async def on_message(message):
     global current_quiz, current_quiz_junior_high, current_quiz_academic
     global user_status, selected_grade, selected_subject, selected_range, selected_content
@@ -474,23 +464,6 @@ async def on_message(message):
     # 💡 【追加】先頭が「!」のコマンドは、クイズ判定を無視して後ろのコマンド処理へスルーさせる
     if message.content.startswith("!") and message.content not in ["!ストップ", "!stop", "!cancel"]:
         pass  # 何もせず、下のクイズ判定に進ませないでスルーします
-
-    # 🎯 2. 一般知識クイズ解答判定
-    elif current_quiz is not None:
-        quiz_data = quiz_dictionary[current_quiz]
-
-    # 🛑 1. 中断コマンド
-    if message.content in ["!ストップ", "!stop", "!cancel"]:
-        user_status = None
-        current_quiz = None
-        current_quiz_junior_high = None
-        current_quiz_academic = None
-        selected_grade = None    
-        selected_subject = None
-        selected_range = None    
-        selected_content = None  
-        await message.channel.send("🛑 クイズ・メニュー選択を中断してリセットしました！")
-        return
 
     # 🎯 2. 一般知識クイズ解答判定
     if current_quiz is not None:
@@ -505,20 +478,19 @@ async def on_message(message):
 
         user_id = message.author.id
         if is_correct:
-            # 正解したときの処理
             update_db_score(user_id, message.author.display_name, is_correct)
             await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です（一般知識）！🎉")
             await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data["explanation"]}')
             current_quiz = None  
         else:
-            # 不正解だったときの処理
             update_db_score(user_id, message.author.display_name, is_correct)
             await message.channel.send("不正解です。<:oh_no:1556661209116184686> もう一度挑戦してみてください！")
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
 
     # 🎯 2.5 学術クイズ（テキスト形式）の解答判定
-    if user_status == "academic_quiz_active" and current_quiz_academic is not None:
+    # 💡 【重要】並び順をココに移動して、上の一般知識クイズ判定（if）の直後の「elif」として綺麗に繋げました！
+    elif user_status == "academic_quiz_active" and current_quiz_academic is not None:
         quiz_data = current_quiz_academic
         is_correct = False
         if isinstance(quiz_data["answer"], list):
@@ -529,25 +501,21 @@ async def on_message(message):
                 is_correct = True
 
         user_id = message.author.id
-        if user_id not in user_scores:
-            user_scores[user_id] = {"correct": 0, "wrong": 0}
-
-        user_id = message.author.id
         if is_correct:
-            # 正解したときの処理
             update_db_score(user_id, message.author.display_name, is_correct)
             await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です！🎉📚")
             await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data["explanation"]}')
-            current_quiz = None  
+            current_quiz_academic = None  
+            user_status = None
         else:
-            # 不正解だったときの処理
             update_db_score(user_id, message.author.display_name, is_correct)
             await message.channel.send("不正解です😢...<:oh_no:1556661209116184686> もう一度挑戦してみてください！")
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
 
     # 🎯 3. 中学クイズ解答判定
-    if user_status == "quiz_active" and current_quiz_junior_high is not None:
+    # 💡 【重要】ここも「elif」に変更し、上のクイズ判定の鎖へ一本に合流させました！
+    elif user_status == "quiz_active" and current_quiz_junior_high is not None:
         is_correct = False
         quiz_data = current_quiz_junior_high
         if isinstance(quiz_data["answer"], list):
@@ -558,21 +526,33 @@ async def on_message(message):
                 is_correct = True
 
         user_id = message.author.id
-        if user_id not in user_scores:
-            user_scores[user_id] = {"correct": 0, "wrong": 0}
-
         if is_correct:
-            user_scores[user_id]["correct"] += 1  
+            # 💡 古い user_scores のプラス処理を、正しい Supabase 保存処理にアップデートしました
+            update_db_score(user_id, message.author.display_name, is_correct)
             await message.channel.send("<a:marugame:1556977377601527920> ⭕ 正解！お見事です！ 🎉")
             await message.channel.send(f'💡 【解説】 \n{quiz_data["explanation"]}')
             current_quiz_junior_high = None  
             user_status = None  
         else:
-            user_scores[user_id]["wrong"] += 1    
+            update_db_score(user_id, message.author.display_name, is_correct)
             await message.channel.send(" 不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！")
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】 \n{quiz_data["hint"]}')
         return
 
+    # 🛑 1. 中断コマンド
+    # 💡 クイズではない独立したコマンド判定なので、クイズ判定の「外側（一番後ろ）」へ安全に退避させました
+    if message.content in ["!ストップ", "!stop", "!cancel"]:
+        user_status = None
+        current_quiz = None
+        current_quiz_junior_high = None
+        current_quiz_academic = None
+        selected_grade = None    
+        selected_subject = None
+        selected_range = None    
+        selected_content = None  
+        await message.channel.send("🛑 クイズ・メニュー選択を中断してリセットしました！")
+        return
+    
     # 📋 4. 中学クイズ：段階的メニュー選択処理
     if user_status == "select_grade":
         grade = message.content.strip()
