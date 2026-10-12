@@ -11,6 +11,12 @@ try:
 except ImportError:
     pass
 
+from supabase import create_client, Client
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
@@ -410,6 +416,28 @@ quiz_dictionary = {
     },
 }
 
+def update_db_score(user_id: int, username: str, is_correct: bool):
+    """正解・不正解時にクラウドデータベースのカウントを+1（アップサート）する関数"""
+    try:
+        response = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
+        if response.data:
+            current = response.data[0]
+            correct = current["correct_count"] + (1 if is_correct else 0)
+            wrong = current["wrong_count"] + (0 if is_correct else 1)
+        else:
+            correct = 1 if is_correct else 0
+            wrong = 0 if is_correct else 1
+
+        supabase.table("user_scores").upsert({
+            "user_id": user_id,
+            "username": username,
+            "correct_count": correct,
+            "wrong_count": wrong,
+            "updated_at": "now()"
+        }).execute()
+    except Exception as e:
+        print(f"Supabaseエラー: {e}")
+
 # ==========================================
 # 📩 メッセージ受信イベント
 # ==========================================
@@ -446,16 +474,15 @@ async def on_message(message):
                 is_correct = True
 
         user_id = message.author.id
-        if user_id not in user_scores:
-            user_scores[user_id] = {"correct": 0, "wrong": 0}
-
         if is_correct:
-            user_scores[user_id]["correct"] += 1  
+            # 正解したときの処理
+            update_db_score(user_id, message.author.display_name, is_correct)
             await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です（一般知識）！🎉")
             await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data["explanation"]}')
             current_quiz = None  
         else:
-            user_scores[user_id]["wrong"] += 1    
+            # 不正解だったときの処理
+            update_db_score(user_id, message.author.display_name, is_correct)
             await message.channel.send("不正解です。<:oh_no:1556661209116184686> もう一度挑戦してみてください！")
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
@@ -475,16 +502,18 @@ async def on_message(message):
         if user_id not in user_scores:
             user_scores[user_id] = {"correct": 0, "wrong": 0}
 
+        user_id = message.author.id
         if is_correct:
-            user_scores[user_id]["correct"] += 1  
-            await message.channel.send("<a:marugame:1556977377601527920> ⭕ 正解！お見事です！ 🎉")
-            await message.channel.send(f'💡 【解説】 \n{quiz_data["explanation"]}')
-            current_quiz_academic = None  
-            user_status = None  
+            # 正解したときの処理
+            update_db_score(user_id, message.author.display_name, is_correct)
+            await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です！🎉📚")
+            await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data["explanation"]}')
+            current_quiz = None  
         else:
-            user_scores[user_id]["wrong"] += 1    
-            await message.channel.send(" 不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！")
-            await message.channel.send(f'💡 【ヒント】 \n{quiz_data["hint"]}')
+            # 不正解だったときの処理
+            update_db_score(user_id, message.author.display_name, is_correct)
+            await message.channel.send("不正解です😢...<:oh_no:1556661209116184686> もう一度挑戦してみてください！")
+            await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
 
     # 🎯 3. 中学クイズ解答判定
