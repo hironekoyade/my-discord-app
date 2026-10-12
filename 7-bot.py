@@ -115,8 +115,8 @@ quiz_junior_high_school = {
                     },
                     "みそ汁は少しの時間放置していると味噌が沈殿する。このことから、みそ汁は水溶液と言えるか。":{
                         "answer":["言えない","いえない"],
-                        "explanation":"水溶液の定義は、変化を加えない限りその水溶液は変化することがない(成分が沈殿したりしない)。この定義から考えてもみそ汁は成分が沈殿しているため水溶液ではないことがわかる。",
-                        "hint":"水溶液の定義を考え直しましょう。"
+                        "explanation":"水溶液の定義は、変化を加えない限りその液体は変化することがない(成分が沈殿したりしない)。この定義から考えてもみそ汁は成分が沈殿しているため水溶液ではないことがわかる。", # 👈 「その水溶液は」を「その液体は」等に修正
+                        "hint":"水溶液の定義を思い出してください。"
                     },
                     "食塩が30g、水が70g入っている食塩水の質量パーセント濃度は？":{
                         "answer":["30%","30パーセント"],
@@ -454,6 +454,7 @@ def update_db_score(user_id: int, username: str, is_correct: bool):
         print(f"Supabase書き込みエラー: {e}")
 
 # 💡 ここからが正しい連動になります
+@client.event
 async def on_message(message):
     global current_quiz, current_quiz_junior_high, current_quiz_academic
     global user_status, selected_grade, selected_subject, selected_range, selected_content
@@ -461,10 +462,8 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    # 💡 【追加】先頭が「!」のコマンドは、クイズ判定を無視して後ろのコマンド処理へスルーさせる
     if message.content.startswith("!") and message.content not in ["!ストップ", "!stop", "!cancel"]:
-        pass  # 何もせず、下のクイズ判定に進ませないでスルーします
-
+        return  # 👈 pass から return に書き換える！
     # 🎯 2. 一般知識クイズ解答判定
     if current_quiz is not None:
         quiz_data = quiz_dictionary[current_quiz]
