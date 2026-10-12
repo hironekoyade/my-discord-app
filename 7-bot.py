@@ -803,7 +803,7 @@ async def on_message(message):
             await message.channel.send("📊 **管理者用メニュー：全ユーザークイズ成績一覧を取得中...**")
             
             # Supabaseの管理画面に直接飛べるURLボタンを作成
-            supabase_url_link = "https://supabase.com"
+            supabase_url_link = "https://supabase.com/dashboard/project/wazohoafsqhhvfigmzwu/editor/17606?schema=public"
             view = discord.ui.View()
             view.add_item(discord.ui.Button(label="Supabase管理画面を開く", url=supabase_url_link, style=discord.ButtonStyle.link))
             
