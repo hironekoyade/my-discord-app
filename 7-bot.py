@@ -697,20 +697,28 @@ async def on_message(message):
 
     if message.content == "!quiz_score":
         user_id = message.author.id
-        if user_id in user_scores:
-            correct = user_scores[user_id].get("correct", 0)
-            wrong = user_scores[user_id].get("wrong", 0)
-            total = correct + wrong
-            rate = (correct / total * 100) if total > 0 else 0
-            
-            await message.channel.send(
-                f"📊 **{message.author.display_name} さんのクイズ成績**\n"
-                f"• 正解数: {correct} 回 ⭕\n"
-                f"• 不正解数: {wrong} 回 ❌\n"
-                f"• 正答率: {rate:.1f} %"
-            )
-        else:
-            await message.channel.send(f"📊 {message.author.display_name} さんは、まだクイズに挑戦していません！")
+        
+        # 💡 古い user_scores の計算処理（5行分）はここに挟まず、直接Supabaseを読み込みます
+        try:
+            response = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
+            if response.data and len(response.data) > 0:
+                data = response.data[0]  # 👈 リストの先頭の辞書オブジェクトを確実に取得
+                correct = data["correct_count"]
+                wrong = data["wrong_count"]
+                total = correct + wrong
+                rate = (correct / total * 100) if total > 0 else 0
+                
+                await message.channel.send(
+                    f"📊 **{message.author.display_name} さんのクイズ成績（クラウド保存）**\n"
+                    f"• 正解数: {correct} 回 ⭕\n"
+                    f"• 不正解数: {wrong} 回 ❌\n"
+                    f"• 正答率: {rate:.1f} %"
+                )
+            else:
+                await message.channel.send(f"📊 {message.author.display_name} さんは、まだクイズに挑戦していません！")
+        except Exception as e:
+            await message.channel.send("❌ スコアの取得中にエラーが発生しました。")
+            print(f"Supabase読み込みエラー: {e}")
         return
     
     # 📋 6. ヘルプ機能
