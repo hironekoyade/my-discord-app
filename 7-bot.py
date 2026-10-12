@@ -780,8 +780,10 @@ async def on_message(message):
             inline=False
         )
         embed.add_field(
-            name="🛠️ 管理者向け機能",
-            value="• `!github-repositories` : 開発用GitHubリポジトリのURLを確認する(管理者のみ)",
+            name="🛠️ 管理者向け機能(実行は管理専用サーバーでしてください)",
+            value=("• `!github-repositories` : 開発用GitHubリポジトリのURLを確認する\n"
+                   "• `!supabase-table(quiz_score)` : 全員のクイズの成績を確認する\n"
+            ),
             inline=False
         )
         
@@ -799,6 +801,56 @@ async def on_message(message):
         
         if message.author.id in ADMIN_USER_ID:
             await message.channel.send("リポジトリです。https://github.com")
+        else:
+            await message.channel.send("❌ このコマンドはBotの管理者のみが実行できます。")
+        return
+
+            # 🛠️ 管理者専用：Supabaseのスコア表＆管理画面ボタンを表示する独立コマンド
+    if message.content == "!supabase-table(quiz_score)":
+        ADMIN_USER_ID = [
+            1385634725460316273,  
+            1551496753088561238,  
+            1188811877447372881,   
+        ]
+        
+        if message.author.id in ADMIN_USER_ID:
+            await message.channel.send("📊 **管理者用メニュー：全ユーザークイズ成績一覧を取得中...**")
+            
+            # Supabaseの管理画面に直接飛べるURLボタンを作成
+            supabase_url_link = "https://supabase.com"
+            view = discord.ui.View()
+            view.add_item(discord.ui.Button(label="Supabase管理画面を開く", url=supabase_url_link, style=discord.ButtonStyle.link))
+            
+            try:
+                # 全データを正解数（correct_count）が多い順にソートして取得
+                response = supabase.table("user_scores").select("*").order("correct_count", descending=True).execute()
+                
+                if response.data and len(response.data) > 0:
+                    table_text = "```\n"
+                    table_text += "【全ユーザークイズ成績ランキング】\n"
+                    table_text += "----------------------------------------------\n"
+                    table_text += f"{'ユーザー名':<16} | {'正解':<4} | {'不正解':<4} | {'正答率':<6}\n"
+                    table_text += "----------------------------------------------\n"
+                    
+                    for row in response.data:
+                        username = row.get("username", "Unknown")[:12]
+                        correct = row.get("correct_count", 0)
+                        wrong = row.get("wrong_count", 0)
+                        total = correct + wrong
+                        rate = (correct / total * 100) if total > 0 else 0
+                        
+                        table_text += f"{username:<14} | {correct:<5} | {wrong:<6} | {rate:>5.1f}%\n"
+                    
+                    table_text += "----------------------------------------------\n"
+                    table_text += "```"
+                    
+                    # スコア表と一緒に、管理画面に飛ぶボタン（view）を送信
+                    await message.channel.send(table_text, view=view)
+                else:
+                    await message.channel.send("⚠️ データベースに登録されているユーザーがまだ存在しません。", view=view)
+            except Exception as e:
+                await message.channel.send("❌ クラウドデータの取得中にエラーが発生しました。")
+                print(f"管理者スコア一覧取得エラー: {e}")
         else:
             await message.channel.send("❌ このコマンドはBotの管理者のみが実行できます。")
         return
