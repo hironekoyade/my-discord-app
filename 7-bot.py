@@ -5,9 +5,13 @@ import sympy as sp
 
 user_scores = {}
 
+# 💡 元の try 〜 except Pass のブロックをこれに書き換えます
+from pathlib import Path
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    # プログラムがある場所（7-bot.pyのフォルダー）の直下にある .env を確実に指名して読み込む
+    env_path = Path(__file__).parent / ".env"
+    load_dotenv(dotenv_path=env_path)
 except ImportError:
     pass
 
@@ -19,7 +23,13 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 intents = discord.Intents.default()
 intents.message_content = True
+
+# 💡 もしこの下の1行が消えていたら、新しく書き足してください！
 client = discord.Client(intents=intents)
+
+# 💡 ここに下の2行を追加してください
+print(f"【デバッグ】読み込んだURL: {SUPABASE_URL}")
+print(f"【デバッグ】読み込んだKEY: {SUPABASE_KEY[:10] if SUPABASE_KEY else 'None'}...")
 
 # ==========================================
 # 📊 状態管理変数
