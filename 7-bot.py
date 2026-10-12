@@ -463,6 +463,21 @@ async def on_message(message):
 
     if message.author == client.user:
         return
+    
+async def on_message(message):
+    global current_quiz, current_quiz_junior_high, current_quiz_academic
+    global user_status, selected_grade, selected_subject, selected_range, selected_content
+
+    if message.author == client.user:
+        return
+
+    # 💡 【追加】先頭が「!」のコマンドは、クイズ判定を無視して後ろのコマンド処理へスルーさせる
+    if message.content.startswith("!") and message.content not in ["!ストップ", "!stop", "!cancel"]:
+        pass  # 何もせず、下のクイズ判定に進ませないでスルーします
+
+    # 🎯 2. 一般知識クイズ解答判定
+    elif current_quiz is not None:
+        quiz_data = quiz_dictionary[current_quiz]
 
     # 🛑 1. 中断コマンド
     if message.content in ["!ストップ", "!stop", "!cancel"]:
