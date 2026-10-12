@@ -420,14 +420,18 @@ def update_db_score(user_id: int, username: str, is_correct: bool):
     """正解・不正解時にクラウドデータベースのカウントを+1（アップサート）する関数"""
     try:
         response = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
-        if response.data:
-            current = response.data[0]
+        
+        # 💡 response.data が空ではない（登録済みユーザー）の場合
+        if response.data and len(response.data) > 0:
+            current = response.data[0]  # 👈 【重要】 [0] をつけてリストの先頭の辞書を取り出す
             correct = current["correct_count"] + (1 if is_correct else 0)
             wrong = current["wrong_count"] + (0 if is_correct else 1)
         else:
+            # 初めてクイズに答えるユーザーの場合
             correct = 1 if is_correct else 0
             wrong = 0 if is_correct else 1
 
+        # データをSupabaseへ保存
         supabase.table("user_scores").upsert({
             "user_id": user_id,
             "username": username,
@@ -435,8 +439,9 @@ def update_db_score(user_id: int, username: str, is_correct: bool):
             "wrong_count": wrong,
             "updated_at": "now()"
         }).execute()
+        print(f"【システムログ】{username} さんのデータをSupabaseに保存しました。") # 確認用ログ
     except Exception as e:
-        print(f"Supabaseエラー: {e}")
+        print(f"Supabase書き込みエラー: {e}")
 
 # ==========================================
 # 📩 メッセージ受信イベント
