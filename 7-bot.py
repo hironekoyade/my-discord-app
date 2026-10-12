@@ -453,7 +453,7 @@ def update_db_score(user_id: int, username: str, is_correct: bool):
     except Exception as e:
         print(f"Supabase書き込みエラー: {e}")
 
-# 💡 ここからが正しい連動になります
+# 💡 1. デコレータを必ず付ける
 @client.event
 async def on_message(message):
     global current_quiz, current_quiz_junior_high, current_quiz_academic
@@ -462,9 +462,16 @@ async def on_message(message):
     if message.author == client.user:
         return
 
+    # 💡 2. 先頭が「!」のコマンドは、クイズの『解答中』の時だけ判定をスルーさせるように修正
+    # （これがないと、!学術クイズ などのコマンド自体もすべて無視されてしまいます）
     if message.content.startswith("!") and message.content not in ["!ストップ", "!stop", "!cancel"]:
-        return  # 👈 pass から return に書き換える！
-    # 🎯 2. 一般知識クイズ解答判定
+        # クイズが何も始まっていない（待機状態の）時は、下のコマンド受付に進ませる
+        if current_quiz is None and current_quiz_junior_high is None and current_quiz_academic is None and user_status is None:
+            pass 
+        else:
+            return  # クイズ進行中の時は、誤爆防止のためメッセージをスルーする
+
+    # 🎯 2. 一般知識クイズ解答判定 （ここから下は元のコードと同じです）
     if current_quiz is not None:
         quiz_data = quiz_dictionary[current_quiz]
         is_correct = False
