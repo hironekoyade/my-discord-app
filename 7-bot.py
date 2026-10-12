@@ -809,7 +809,7 @@ async def on_message(message):
             
             try:
                 # 全データを正解数（correct_count）が多い順にソートして取得
-                response = supabase.table("user_scores").select("*").order("correct_count", descending=True).execute()
+                response = supabase.table("user_scores").select("*").order("correct_count", desc=True).execute()
                 
                 if response.data and len(response.data) > 0:
                     table_text = "```\n"
