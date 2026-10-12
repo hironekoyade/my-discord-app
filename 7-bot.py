@@ -304,15 +304,20 @@ quiz_academic = {
 }
 
 # ==========================================
-# 💡 ボタンコンポーネントクラスを定義
+# 💡 ボタンコンポーネントクラスを定義（フリーズ＆色固定 対策版）
 # ==========================================
 class AcademicQuizButton(discord.ui.Button):
-    # 💡 ここで新しく「style（色）」も一緒に受け取るように変更！
+    # ⚠️ 一番最初の「青にする処理」自体を、ここで完全に書き換えます！
     def __init__(self, label, view_obj, style):
-        super().__init__(label=label, style=style) # 💡 固定の青ではなく、受け取った色で作る！
+        # ここを style=style にすることで、最初から絶対に指定した色になります
+        super().__init__(label=label, style=style)
         self.view_obj = view_obj
 
     async def callback(self, interaction: discord.Interaction):
+        # 💡 Discordのフリーズ対策：ボタンを押されたら、即座に「考え中...」のサインを出して3秒制限を解除する
+        await interaction.response.defer()
+        
+        # その後、正誤判定のメッセージを送る
         await self.view_obj.process_choice(interaction, self.label)
 
 
