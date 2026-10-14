@@ -4,6 +4,23 @@ import discord
 import sympy as sp
 import json
 user_scores = {}
+from discord.ext import tasks  # 🌟 一番上のインポート欄に追加
+import random
+
+# ==========================================
+# 🔑 管理者パスワード管理（複合システム版）
+# ==========================================
+ADMIN_PASSWORD = str(random.randint(1000, 9999))
+
+# 👑 絶対に変わらない「元の3人（創設者）」の固定IDリスト
+ORIGINAL_ADMINS = [
+    1385634725460316273,  
+    1551496753088561238,  
+    1188811877447372881,
+]
+
+# 📝 動的に管理者が増えていくリスト（最初は3人からスタート）
+ADMIN_USER_ID = ORIGINAL_ADMINS.copy()
 
 # 💡 元の try 〜 except Pass のブロックをこれに書き換えます
 from pathlib import Path
@@ -30,6 +47,22 @@ client = discord.Client(intents=intents)
 # 💡 ここに下の2行を追加してください
 print(f"【デバッグ】読み込んだURL: {SUPABASE_URL}")
 print(f"【デバッグ】読み込んだKEY: {SUPABASE_KEY[:10] if SUPABASE_KEY else 'None'}...")
+
+@tasks.loop(hours=24)
+async def auto_reset_password():
+    global ADMIN_PASSWORD
+    ADMIN_PASSWORD = str(random.randint(1000, 9999))
+    print(f"【🔑定期リセット】24時間が経過したため、パスワードを自動変更しました: {ADMIN_PASSWORD}")
+
+# Botが起動したときに、上のタイマーをスタートさせる
+@client.event
+async def on_ready():
+    print(f"ログインしました: {client.user}")
+    print(f"【🔑システムログ】初期パスワードは: {ADMIN_PASSWORD}")
+    
+    # ⏱️ タイマーがまだ動いていなければ、ここで起動する
+    if not auto_reset_password.is_running():
+        auto_reset_password.start()
 
 # ==========================================
 # 📊 状態管理変数
@@ -144,6 +177,24 @@ async def on_message(message):
     global user_status, selected_grade, selected_subject, selected_range, selected_content
 
     if message.author == client.user:
+        return
+
+        # 🔄 【トリガー2】元の3人だけが使えるパスワード強制リセットコマンド
+    if message.content == "!password-reset":
+        # 🌟 if文を使って、打った人が「元の3人」のリストに入っているか厳格にチェック！
+        if message.author.id in ORIGINAL_ADMINS:
+            global ADMIN_PASSWORD
+            ADMIN_PASSWORD = str(random.randint(1000, 9999))
+            
+            # 実行した創設者のDM（ダイレクトメッセージ）にだけ、新しいパスワードをこっそり通知
+            try:
+                await message.author.send(f"👑 パスワードを強制リセットしました：【{ADMIN_PASSWORD}】")
+                await message.channel.send("🔄 創設者権限により、パスワードをランダムな新しい値に変更しました！（実行者にDMを送信しました）")
+            except discord.Forbidden:
+                # 万が一DMがブロックされていた場合のバックアップ対策
+                await message.channel.send(f"🔄 パスワードを変更しました！（※DMが閉じていたため、MWSのログを確認してください）")
+        else:
+            await message.channel.send("❌ エラー：この緊急コマンドはBotの【創設者3人】のみが実行できます。")
         return
 
     # 💡 2. 先頭が「!」のコマンドは、クイズの『解答中』の時だけ判定をスルーさせるように修正
