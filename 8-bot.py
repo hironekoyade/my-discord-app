@@ -132,6 +132,44 @@ class AcademicQuizView(discord.ui.View):
             btn = AcademicQuizButton(label=opt, view_obj=self, style=current_style)
             self.add_item(btn)
 
+# ==========================================
+# 🔑 管理者認証用の入力フォーム（モーダル画面）
+# ==========================================
+class AdminAuthModal(discord.ui.Modal, title="管理者認証フォーム"):
+    password_input = discord.ui.TextInput(
+        label="4桁のパスワードを入力してください", 
+        placeholder="例: 1234",
+        min_length=4,
+        max_length=4
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        global ADMIN_USER_ID
+        user_id = interaction.user.id
+        
+        if self.password_input.value == ADMIN_PASSWORD:
+            if user_id in ADMIN_USER_ID:
+                await interaction.response.send_message("⚠️ あなたはすでに管理者リストに登録されています。", ephemeral=True)
+            else:
+                ADMIN_USER_ID.append(user_id)
+                await interaction.response.send_message(f"👑 認証成功！管理者リストに追加されました！", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ パスワードが違います。認証に失敗しました。", ephemeral=True)
+
+async def on_message(message):
+# 🔑 管理者認証ボタンを呼び出す新しいコマンド
+    if message.content == "!admin":
+        class AuthButtonView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=60.0)
+            
+            @discord.ui.button(label="👑 管理者認証フォームを開く", style=discord.ButtonStyle.primary)
+            async def open_modal(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                await button_interaction.response.send_modal(AdminAuthModal())
+
+        await message.channel.send("以下のボタンを押して、パスワードを入力してください！", view=AuthButtonView())
+        return
+
 x, h = sp.symbols('x h')
 f = x**2
 definition_expr = (f.subs(x, x + h) - f) / h
@@ -588,6 +626,7 @@ async def on_message(message):
         else:
             await message.channel.send("❌ このコマンドはBotの管理者のみが実行できます。")
         return
+
 
     # 🎲 7. サイコロ機能
     if message.content.startswith("!サイコロ"):
