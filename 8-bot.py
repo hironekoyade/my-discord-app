@@ -3,9 +3,12 @@ import random
 import discord
 import sympy as sp
 import json
+import string
+from discord.ext import tasks  # 🌟 インポートはここに綺麗にまとめます
+
+# 全てのインポートが終わった後に、変数を置きます！
 user_scores = {}
-from discord.ext import tasks  # 🌟 一番上のインポート欄に追加
-import random
+
 
 # ==========================================
 # 🔑 管理者パスワード管理（複合システム版）
@@ -51,8 +54,12 @@ print(f"【デバッグ】読み込んだKEY: {SUPABASE_KEY[:10] if SUPABASE_KEY
 @tasks.loop(hours=24)
 async def auto_reset_password():
     global ADMIN_PASSWORD
-    ADMIN_PASSWORD = str(random.randint(1000, 9999))
-    print(f"【🔑定期リセット】24時間が経過したため、パスワードを自動変更しました: {ADMIN_PASSWORD}")
+# 英大文字・小文字・数字をすべて混ぜたおもちゃ箱を作る
+characters = string.ascii_letters + string.digits
+
+# そこからランダムに6文字を選んで合体させる
+ADMIN_PASSWORD = "".join(random.choices(characters, k=6))
+print(f"【🔑定期リセット】24時間が経過したため、パスワードを自動変更しました: {ADMIN_PASSWORD}")
 
 # Botが起動したときに、上のタイマーをスタートさせる
 @client.event
@@ -137,10 +144,10 @@ class AcademicQuizView(discord.ui.View):
 # ==========================================
 class AdminAuthModal(discord.ui.Modal, title="管理者認証フォーム"):
     password_input = discord.ui.TextInput(
-        label="4桁のパスワードを入力してください", 
-        placeholder="例: 1234",
-        min_length=4,
-        max_length=4
+        label="6桁の英数字パスワードを入力してください", 
+        placeholder="例: aB3x9Z",
+        min_length=6,
+        max_length=6
     )
 
     async def on_submit(self, interaction: discord.Interaction):
