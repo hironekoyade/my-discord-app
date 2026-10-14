@@ -919,19 +919,6 @@ async def on_message(message):
 async def on_ready():
     print(f"ログインしました: {client.user}")
 
-# 7-bot.py の一番下に貼り付けて1回だけRunする
-import json
-
-with open("quiz_junior_high_school.json", "w", encoding="utf-8") as f:
-    json.dump(quiz_junior_high_school, f, ensure_ascii=False, indent=4)
-
-with open("quiz_academic.json", "w", encoding="utf-8") as f:
-    json.dump(quiz_academic, f, ensure_ascii=False, indent=4)
-
-with open("quiz_dictionary.json", "w", encoding="utf-8") as f:
-    json.dump(quiz_dictionary, f, ensure_ascii=False, indent=4)
-
-print("🎉 完璧な3つのJSONファイルが自動生成されました！")
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 client.run(TOKEN)
