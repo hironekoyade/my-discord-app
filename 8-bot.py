@@ -596,6 +596,7 @@ async def on_message(message):
                 "• `!ランダムに州を選んで` : 世界の6大州をランダムに選択\n"
                 "• `!こんにちは` / `!おはよう` / `!こんばんは` / `!おやすみ`\n"
                 "• `!quiz_score` : クイズのスコアを表示！\n"
+                "• `!myrank-toggle` : 自分のクイズ正解数による役職付与を有効化/無効化\n"
             ),
             inline=False
         )
@@ -603,6 +604,7 @@ async def on_message(message):
             name="🛠️ 管理者向け機能(実行は管理専用サーバーでしてください)",
             value=("• `!github-repositories` : 開発用GitHubリポジトリのURLを確認する\n"
                    "• `!supabase-table(quiz_score)` : 全員のクイズの成績を確認する\n"
+                   "• `!rank-toggle` : サーバーのクイズ正解数による役職付与を有効化/無効化\n"
             ),
             inline=False
         )
@@ -815,8 +817,8 @@ async def on_message(message):
             description="Supabaseに保存された累計正解数で自動昇進します！",
             color=discord.Color.gold()
         )
-        embed.add_field(name="🎓 永世博士", value="累計 **120問** 正解", inline=False)
-        embed.add_field(name="🎓 博士博士号", value="累計 **80問** 正解", inline=False)
+        embed.add_field(name="⁉️ 永世博士", value="累計 **120問** 正解", inline=False)
+        embed.add_field(name="🪪 博士博士号", value="累計 **80問** 正解", inline=False)
         embed.add_field(name="🎓 物知り博士", value="累計 **50問** 正解", inline=False)
         embed.add_field(name="⚔️ クイズ達人", value="累計 **30問** 正解", inline=False)
         embed.add_field(name="📝 見習い学者", value="累計 **10問** 正解", inline=False)
