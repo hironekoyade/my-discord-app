@@ -604,7 +604,7 @@ async def on_message(message):
             name="🛠️ 管理者向け機能(実行は管理専用サーバーでしてください)",
             value=("• `!github-repositories` : 開発用GitHubリポジトリのURLを確認する\n"
                    "• `!supabase-table(quiz_score)` : 全員のクイズの成績を確認する\n"
-                   "• `!rank-toggle` : サーバーのクイズ正解数による役職付与を有効化/無効化\n"
+                   "• `!server-rank-toggle` : サーバーのクイズ正解数による役職付与を有効化/無効化\n"
             ),
             inline=False
         )
@@ -690,24 +690,37 @@ async def on_message(message):
             await message.channel.send("❌ このコマンドはBotの管理者のみが実行できます。")
         return
 
-    # ⚙️【管理者専用】役職昇進機能のオンオフ切り替えコマンド
+    # ⚙️【各サーバー管理者専用】役職昇進機能のオンオフ切り替えコマンド（修正＆統合）
     if message.content == "!rank-toggle":
+        if message.guild is None:
+            await message.channel.send("❌ このコマンドはサーバー内でのみ実行できます。")
+            return
+
         ADMIN_USER_ID = [
-                    1385634725460316273,  
-                    1551496753088561238,   
-                    1446830807007101102,
-                    1188811877447372881,
-                    1190487161875742781,
-                    1218614290542497967
+            1385634725460316273,  
+            1551496753088561238,   
+            1446830807007101102,
+            1188811877447372881,
+            1190487161875742781,
+            1218614290542497967
         ]
-        global is_rank_role_enabled
-            # 状態を反転させる（TrueならFalseに、FalseならTrueにする）
-        is_rank_role_enabled = not is_rank_role_enabled
+
+        is_server_admin = message.author.guild_permissions.administrator
+        if (message.author.id in ADMIN_USER_ID) or is_server_admin:
+            guild_id_str = str(message.guild.id)
             
-        status_text = "【🟢有効（オン）】" if is_rank_role_enabled else "【🔴無効（オフ）】"
-        await message.channel.send(f"⚙️ **サーバー管理設定：** クイズ役職の自動昇進システムを **{status_text}** に切り替えました。")
-    else:
-        await message.channel.send("❌ この設定コマンドはBotの管理者のみが実行できます。")
+            global is_rank_role_enabled
+            is_rank_role_enabled = not is_rank_role_enabled
+            
+            if guild_id_str not in server_settings:
+                server_settings[guild_id_str] = {}
+            server_settings[guild_id_str]["rank_role_enabled"] = is_rank_role_enabled
+            save_server_settings()
+            
+            status_text = "【🟢有効（オン）】" if is_rank_role_enabled else "【🔴無効（オフ）】"
+            await message.channel.send(f"⚙️ **サーバー管理設定：** このサーバーでのクイズ役職自動昇進システムを **{status_text}** に切り替えました。")
+        else:
+            await message.channel.send("❌ この設定コマンドは、Botの管理者、またはこのサーバーの管理者権限（Administrator）を持つ人のみ実行できます。")
         return
     
     # 🎲 7. サイコロ機能
@@ -785,7 +798,7 @@ async def on_message(message):
         return
         # 🏅 役職の昇進条件を表示する単独コマンド
         # ⚙️【各サーバー管理者専用】役職昇進機能のオンオフ切り替えコマンド
-    elif message.content == "!rank-toggle":
+    elif message.content == "!server-rank-toggle":
         if message.guild is None:
             await message.channel.send("❌ このコマンドはサーバー内でのみ実行できます。")
             return
