@@ -156,20 +156,6 @@ class AdminAuthModal(discord.ui.Modal, title="管理者認証フォーム"):
         else:
             await interaction.response.send_message("❌ パスワードが違います。認証に失敗しました。", ephemeral=True)
 
-async def on_message(message):
-# 🔑 管理者認証ボタンを呼び出す新しいコマンド
-    if message.content == "!admin":
-        class AuthButtonView(discord.ui.View):
-            def __init__(self):
-                super().__init__(timeout=60.0)
-            
-            @discord.ui.button(label="👑 管理者認証フォームを開く", style=discord.ButtonStyle.primary)
-            async def open_modal(self, button_interaction: discord.Interaction, button: discord.ui.Button):
-                await button_interaction.response.send_modal(AdminAuthModal())
-
-        await message.channel.send("以下のボタンを押して、パスワードを入力してください！", view=AuthButtonView())
-        return
-
 x, h = sp.symbols('x h')
 f = x**2
 definition_expr = (f.subs(x, x + h) - f) / h
@@ -213,6 +199,19 @@ def update_db_score(user_id: int, username: str, is_correct: bool):
 async def on_message(message):
     global current_quiz, current_quiz_junior_high, current_quiz_academic
     global user_status, selected_grade, selected_subject, selected_range, selected_content
+
+    # 🔑 管理者認証ボタンを呼び出す新しいコマンド
+    if message.content == "!admin":
+        class AuthButtonView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=60.0)
+            
+            @discord.ui.button(label="👑 管理者認証フォームを開く", style=discord.ButtonStyle.primary)
+            async def open_modal(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+                await button_interaction.response.send_modal(AdminAuthModal())
+
+        await message.channel.send("以下のボタンを押して、パスワードを入力してください！", view=AuthButtonView())
+        return
 
     if message.author == client.user:
         return
