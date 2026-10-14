@@ -82,7 +82,31 @@ user_status = None
 selected_grade = None    
 selected_subject = None         
 selected_range = None    
-selected_content = None    
+selected_content = None 
+
+# 💡【追加】役職自動付与機能のオンオフスイッチ（True=オン、False=オフ）
+is_rank_role_enabled = True  
+
+# ==========================================
+# ⚙️ サーバーごとの個別設定管理システム
+# ==========================================
+server_settings = {}
+
+# ボット起動時に保存された設定ファイルを読み込む
+if os.path.exists("server_settings.json"):
+    with open("server_settings.json", "r", encoding="utf-8") as f:
+        server_settings = json.load(f)
+
+def save_server_settings():
+    """設定をファイルに保存するヘルパー関数"""
+    with open("server_settings.json", "w", encoding="utf-8") as f:
+        json.dump(server_settings, f, ensure_ascii=False, indent=4)
+
+def is_rank_enabled_for_guild(guild_id: int) -> bool:
+    """そのサーバーで役職機能が有効かどうかを判定する（デフォルトはTrue=オン）"""
+    str_id = str(guild_id)
+    # サーバー個別の設定がなければ、初期値として True（オン）を返す
+    return server_settings.get(str_id, {}).get("rank_role_enabled", True)
 
 # ① 中学クイズ
 quiz_junior_high_school = {}
@@ -174,18 +198,21 @@ if os.path.exists("quiz_dictionary.json"):
     with open("quiz_dictionary.json", "r", encoding="utf-8") as f:
         quiz_dictionary = json.load(f)
 
-def update_db_score(user_id: int, username: str, is_correct: bool):
-    """正解・不正解時にクラウドデータベースのカウントを+1（アップサート）する関数"""
+def update_db_score(user_id: int, username: str, is_correct: bool, message: discord.Message = None):
+    """正解・不正解時にクラウドデータベースのカウントを+1（アップサート）し、個人の役職設定をチェックする関数"""
     try:
         response = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
         
-        # 💡 response.data が空ではない（登録済みユーザー）の場合
+        # ユーザー個人の設定（デフォルトはTrue=オン）
+        user_rank_preference = True
+        
         if response.data and len(response.data) > 0:
-            current = response.data[0]  # 👈 【重要】 [0] をつけてリストの先頭の辞書を取り出す
+            current = response.data[0]
             correct = current["correct_count"] + (1 if is_correct else 0)
             wrong = current["wrong_count"] + (0 if is_correct else 1)
+            # 💡 データベースからユーザー個人のオンオフ設定を読み込む
+            user_rank_preference = current.get("is_rank_enabled", True)
         else:
-            # 初めてクイズに答えるユーザーの場合
             correct = 1 if is_correct else 0
             wrong = 0 if is_correct else 1
 
@@ -195,11 +222,39 @@ def update_db_score(user_id: int, username: str, is_correct: bool):
             "username": username,
             "correct_count": correct,
             "wrong_count": wrong,
+            "is_rank_enabled": user_rank_preference,  # 💡 設定値を維持して保存
             "updated_at": "now()"
         }).execute()
-        print(f"【システムログ】{username} さんのデータをSupabaseに保存しました。") # 確認用ログ
+        print(f"【システムログ】{username} さんのデータをSupabaseに保存しました。")
+
+        # 👑 役職昇進チェック
+        # 💡「ユーザー個人が役職をオンにしている場合」のみロールを付与する
+        if user_rank_preference and is_correct and message and message.guild:
+            import asyncio
+            
+            async def assign_rank_role():
+                role_name = None
+                if correct >= 120:
+                    role_name = "永世博士"
+                elif correct >= 80:
+                    role_name = "博士博士号"
+                elif correct >= 50:
+                    role_name = "物知り博士"
+                elif correct >= 30:
+                    role_name = "クイズ達人"
+                elif correct >= 10:
+                    role_name = "見習い学者"
+                
+                if role_name:
+                    role = discord.utils.get(message.guild.roles, name=role_name)
+                    if role and role not in message.author.roles:
+                        await message.author.add_roles(role)
+                        await message.channel.send(f"🆙 **【ランクアップ！】** {message.author.mention} さんの累計正解数が **{correct}問** に達したため、**【{role_name}】** に昇進しました！ 🎉")
+            
+            asyncio.run_coroutine_threadsafe(assign_rank_role(), client.loop)
+
     except Exception as e:
-        print(f"Supabase書き込みエラー: {e}")
+        print(f"Supabase書き込み/ロール付与エラー: {e}")
 
 # 💡 1. デコレータを必ず付ける
 @client.event
@@ -242,15 +297,13 @@ async def on_message(message):
         return
 
     # 💡 2. 先頭が「!」のコマンドは、クイズの『解答中』の時だけ判定をスルーさせるように修正
-    # （これがないと、!学術クイズ などのコマンド自体もすべて無視されてしまいます）
     if message.content.startswith("!") and message.content not in ["!ストップ", "!stop", "!cancel"]:
-        # クイズが何も始まっていない（待機状態の）時は、下のコマンド受付に進ませる
         if current_quiz is None and current_quiz_junior_high is None and current_quiz_academic is None and user_status is None:
             pass 
         else:
-            return  # クイズ進行中の時は、誤爆防止のためメッセージをスルーする
+            return  
 
-    # 🎯 2. 一般知識クイズ解答判定 （ここから下は元のコードと同じです）
+    # 🎯 2. 一般知識クイズ解答判定 （末尾に message を追加）
     if current_quiz is not None:
         quiz_data = quiz_dictionary[current_quiz]
         is_correct = False
@@ -263,18 +316,17 @@ async def on_message(message):
 
         user_id = message.author.id
         if is_correct:
-            update_db_score(user_id, message.author.display_name, is_correct)
+            update_db_score(user_id, message.author.display_name, is_correct, message)
             await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です（一般知識）！🎉")
             await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data["explanation"]}')
             current_quiz = None  
         else:
-            update_db_score(user_id, message.author.display_name, is_correct)
+            update_db_score(user_id, message.author.display_name, is_correct, message)
             await message.channel.send("不正解です。<:oh_no:1556661209116184686> もう一度挑戦してみてください！")
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
 
-    # 🎯 2.5 学術クイズ（テキスト形式）の解答判定
-    # 💡 【重要】並び順をココに移動して、上の一般知識クイズ判定（if）の直後の「elif」として綺麗に繋げました！
+    # 🎯 2.5 学術クイズ（テキスト形式）の解答判定 （末尾に message を追加）
     elif user_status == "academic_quiz_active" and current_quiz_academic is not None:
         quiz_data = current_quiz_academic
         is_correct = False
@@ -287,19 +339,18 @@ async def on_message(message):
 
         user_id = message.author.id
         if is_correct:
-            update_db_score(user_id, message.author.display_name, is_correct)
+            update_db_score(user_id, message.author.display_name, is_correct, message)
             await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です！🎉📚")
             await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data["explanation"]}')
             current_quiz_academic = None  
             user_status = None
         else:
-            update_db_score(user_id, message.author.display_name, is_correct)
+            update_db_score(user_id, message.author.display_name, is_correct, message)
             await message.channel.send("不正解です😢...<:oh_no:1556661209116184686> もう一度挑戦してみてください！")
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
 
-    # 🎯 3. 中学クイズ解答判定
-    # 💡 【重要】ここも「elif」に変更し、上のクイズ判定の鎖へ一本に合流させました！
+    # 🎯 3. 中学クイズ解答判定 （末尾に message を追加）
     elif user_status == "quiz_active" and current_quiz_junior_high is not None:
         is_correct = False
         quiz_data = current_quiz_junior_high
@@ -312,14 +363,13 @@ async def on_message(message):
 
         user_id = message.author.id
         if is_correct:
-            # 💡 古い user_scores のプラス処理を、正しい Supabase 保存処理にアップデートしました
-            update_db_score(user_id, message.author.display_name, is_correct)
+            update_db_score(user_id, message.author.display_name, is_correct, message)
             await message.channel.send("<a:marugame:1556977377601527920> ⭕ 正解！お見事です！ 🎉")
             await message.channel.send(f'💡 【解説】 \n{quiz_data["explanation"]}')
             current_quiz_junior_high = None  
             user_status = None  
         else:
-            update_db_score(user_id, message.author.display_name, is_correct)
+            update_db_score(user_id, message.author.display_name, is_correct, message)
             await message.channel.send(" 不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！")
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】 \n{quiz_data["hint"]}')
         return
@@ -478,21 +528,26 @@ async def on_message(message):
     if message.content == "!quiz_score":
         user_id = message.author.id
         
-        # 💡 古い user_scores の計算処理（5行分）はここに挟まず、直接Supabaseを読み込みます
         try:
             response = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
             if response.data and len(response.data) > 0:
-                data = response.data[0]  # 👈 リストの先頭の辞書オブジェクトを確実に取得
+                data = response.data[0]  
                 correct = data["correct_count"]
                 wrong = data["wrong_count"]
                 total = correct + wrong
                 rate = (correct / total * 100) if total > 0 else 0
                 
+                # 💡【追加】データベースからオンオフ設定を読み込んで、表示用のテキストを作る
+                is_enabled = data.get("is_rank_enabled", True)
+                status_text = "🟢 受け取る（オン）" if is_enabled else "🔴 受け取らない（オフ）"
+                
+                # 💡 メッセージの一番下に「現在の設定状況」を書き足す
                 await message.channel.send(
                     f"📊 **{message.author.display_name} さんのクイズ成績（クラウド保存）**\n"
                     f"• 正解数: {correct} 回 ⭕\n"
                     f"• 不正解数: {wrong} 回 ❌\n"
-                    f"• 正答率: {rate:.1f} %"
+                    f"• 正答率: {rate:.1f} %\n"
+                    f"• 役職の自動付与: **{status_text}**" # 👈 ここを追加！
                 )
             else:
                 await message.channel.send(f"📊 {message.author.display_name} さんは、まだクイズに挑戦していません！")
@@ -633,7 +688,26 @@ async def on_message(message):
             await message.channel.send("❌ このコマンドはBotの管理者のみが実行できます。")
         return
 
-
+    # ⚙️【管理者専用】役職昇進機能のオンオフ切り替えコマンド
+    if message.content == "!rank-toggle":
+        ADMIN_USER_ID = [
+                    1385634725460316273,  
+                    1551496753088561238,   
+                    1446830807007101102,
+                    1188811877447372881,
+                    1190487161875742781,
+                    1218614290542497967
+        ]
+        global is_rank_role_enabled
+            # 状態を反転させる（TrueならFalseに、FalseならTrueにする）
+        is_rank_role_enabled = not is_rank_role_enabled
+            
+        status_text = "【🟢有効（オン）】" if is_rank_role_enabled else "【🔴無効（オフ）】"
+        await message.channel.send(f"⚙️ **サーバー管理設定：** クイズ役職の自動昇進システムを **{status_text}** に切り替えました。")
+    else:
+        await message.channel.send("❌ この設定コマンドはBotの管理者のみが実行できます。")
+        return
+    
     # 🎲 7. サイコロ機能
     if message.content.startswith("!サイコロ"):
         args = message.content.split()
@@ -706,6 +780,86 @@ async def on_message(message):
         await message.channel.send("州をランダムに選びます！選ばれたのは...")
         state = ["オセアニア州！", "アフリカ州！", "アジア州！", "ヨーロッパ州！", "北アメリカ州！", "南アメリカ州！"]
         await message.channel.send(random.choice(state))
+        return
+        # 🏅 役職の昇進条件を表示する単独コマンド
+        # ⚙️【各サーバー管理者専用】役職昇進機能のオンオフ切り替えコマンド
+    elif message.content == "!rank-toggle":
+        if message.guild is None:
+            await message.channel.send("❌ このコマンドはサーバー内でのみ実行できます。")
+            return
+
+        # 💡 開発者リストに入っているか、または「そのサーバーの管理者権限」を持っているかチェック
+        is_server_admin = message.author.guild_permissions.administrator
+        if (message.author.id in ADMIN_USER_ID) or is_server_admin:
+            
+            guild_id_str = str(message.guild.id)
+            
+            # 現在の状態を取得して反転させる
+            current_status = is_rank_enabled_for_guild(message.guild.id)
+            next_status = not current_status
+            
+            # サーバーごとの辞書を更新して保存
+            if guild_id_str not in server_settings:
+                server_settings[guild_id_str] = {}
+            server_settings[guild_id_str]["rank_role_enabled"] = next_status
+            save_server_settings()
+            
+            status_text = "【🟢有効（オン）】" if next_status else "【🔴無効（オフ）】"
+            await message.channel.send(f"⚙️ **サーバー管理設定：** このサーバーでのクイズ役職自動昇進システムを **{status_text}** に切り替えました。")
+        else:
+            await message.channel.send("❌ この設定コマンドは、Botの管理者、またはこのサーバーの管理者権限（Administrator）を持つ人のみ実行できます。")
+        return
+    elif message.content == "!ランク条件":
+        embed = discord.Embed(
+            title="🎖️ クイズ役職・昇進条件一覧",
+            description="Supabaseに保存された累計正解数で自動昇進します！",
+            color=discord.Color.gold()
+        )
+        embed.add_field(name="🎓 永世博士", value="累計 **120問** 正解", inline=False)
+        embed.add_field(name="🎓 博士博士号", value="累計 **80問** 正解", inline=False)
+        embed.add_field(name="🎓 物知り博士", value="累計 **50問** 正解", inline=False)
+        embed.add_field(name="⚔️ クイズ達人", value="累計 **30問** 正解", inline=False)
+        embed.add_field(name="📝 見習い学者", value="累計 **10問** 正解", inline=False)
+        embed.set_footer(text="現在の自分のスコアは !quiz_score で確認できるよ！")
+        
+        await message.channel.send(embed=embed)
+        return
+    # 👤【一般ユーザー用】自分自身の役職自動付与をオンオフするコマンド
+    elif message.content == "!myrank-toggle":
+        user_id = message.author.id
+        
+        try:
+            # データベースから現在の設定を取得
+            response = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
+            
+            current_status = True  # デフォルト値
+            correct_count = 0
+            wrong_count = 0
+            
+            if response.data and len(response.data) > 0:
+                current_status = response.data[0].get("is_rank_enabled", True)
+                correct_count = response.data[0].get("correct_count", 0)
+                wrong_count = response.data[0].get("wrong_count", 0)
+            
+            # 状態を反転させる
+            next_status = not current_status
+            
+            # データベースを即座に更新
+            supabase.table("user_scores").upsert({
+                "user_id": user_id,
+                "username": message.author.display_name,
+                "correct_count": correct_count,
+                "wrong_count": wrong_count,
+                "is_rank_enabled": next_status,
+                "updated_at": "now()"
+            }).execute()
+            
+            status_text = "【🟢受け取る（オン）】" if next_status else "【🔴受け取らない（オフ）】"
+            await message.channel.send(f"👤 {message.author.mention} さん、あなたのクイズ役職自動付与設定を **{status_text}** に変更しました。")
+            
+        except Exception as e:
+            await message.channel.send("❌ 設定の変更中にエラーが発生しました。")
+            print(f"個人設定切り替えエラー: {e}")
         return
 
 @client.event
