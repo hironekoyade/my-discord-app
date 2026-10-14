@@ -2,7 +2,7 @@ import os
 import random
 import discord
 import sympy as sp
-
+import json
 user_scores = {}
 
 # 💡 元の try 〜 except Pass のブロックをこれに書き換えます
