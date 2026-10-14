@@ -12,11 +12,10 @@ import random
 # ==========================================
 ADMIN_PASSWORD = str(random.randint(1000, 9999))
 
-# 👑 絶対に変わらない「元の3人（創設者）」の固定IDリスト
+# 👑 絶対に変わらない「元の2人（創設者）」の固定IDリスト
 ORIGINAL_ADMINS = [
     1385634725460316273,  
     1551496753088561238,  
-    1188811877447372881,
 ]
 
 # 📝 動的に管理者が増えていくリスト（最初は3人からスタート）
@@ -507,6 +506,13 @@ async def on_message(message):
             ),
             inline=False
         )
+        embed.add_field(
+            name="🫆 管理者向けパスワード機能(実行は管理専用サーバーでしてください)",
+            value=("• `!github-repositories` : 開発用GitHubリポジトリのURLを確認する\n"
+                   "• `!supabase-table(quiz_score)` : 全員のクイズの成績を確認する\n"
+            ),
+            inline=False
+        )
         
         embed.set_footer(text="大文字・小文字の打ち間違いに注意してね！")
         await message.channel.send(embed=embed)
@@ -515,9 +521,8 @@ async def on_message(message):
     # 🛠️ 管理者専用：GitHubリポジトリ確認コマンド
     if message.content == "!github-repositories":
         ADMIN_USER_ID = [
-            1385634725460316273,  
-            1551496753088561238,  
-            1188811877447372881,   
+            1385634725460316273, 
+            1551496753088561238,     
         ]
         
         if message.author.id in ADMIN_USER_ID:
@@ -530,8 +535,7 @@ async def on_message(message):
     if message.content == "!supabase-table(quiz_score)":
         ADMIN_USER_ID = [
             1385634725460316273,  
-            1551496753088561238,  
-            1188811877447372881,   
+            1551496753088561238,   
         ]
         
         if message.author.id in ADMIN_USER_ID:
