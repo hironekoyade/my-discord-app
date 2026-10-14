@@ -12,11 +12,12 @@ import random
 # ==========================================
 ADMIN_PASSWORD = str(random.randint(1000, 9999))
 
-# 👑 絶対に変わらない「元の2人（創設者）」の固定IDリスト
+# 👑 絶対に変わらない「元の3人（創設者）」の固定IDリスト
 ORIGINAL_ADMINS = [
-    1385634725460316273,  
+    1385634725460316273,
     1551496753088561238,  
-]
+    1446830807007101102
+    ]
 
 # 📝 動的に管理者が増えていくリスト（最初は3人からスタート）
 ADMIN_USER_ID = ORIGINAL_ADMINS.copy()
@@ -522,7 +523,8 @@ async def on_message(message):
     if message.content == "!github-repositories":
         ADMIN_USER_ID = [
             1385634725460316273, 
-            1551496753088561238,     
+            1551496753088561238,  
+            1446830807007101102   
         ]
         
         if message.author.id in ADMIN_USER_ID:
