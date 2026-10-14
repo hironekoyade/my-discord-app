@@ -223,20 +223,20 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-        # 🔄 【トリガー2】元の3人だけが使えるパスワード強制リセットコマンド
+    # 🔄 【トリガー2】元の3人だけが使えるパスワード強制リセットコマンド
     if message.content == "!password-reset":
-        # 🌟 if文を使って、打った人が「元の3人」のリストに入っているか厳格にチェック！
         if message.author.id in ORIGINAL_ADMINS:
             global ADMIN_PASSWORD
-            ADMIN_PASSWORD = str(random.randint(1000, 9999))
             
-            # 実行した創設者のDM（ダイレクトメッセージ）にだけ、新しいパスワードをこっそり通知
+            # 🌟 ここも「英数字6文字」を生成するコードに書き換える！
+            characters = string.ascii_letters + string.digits
+            ADMIN_PASSWORD = "".join(random.choices(characters, k=6))
+            
             try:
                 await message.author.send(f"👑 パスワードを強制リセットしました：【{ADMIN_PASSWORD}】")
                 await message.channel.send("🔄 創設者権限により、パスワードをランダムな新しい値に変更しました！（実行者にDMを送信しました）")
             except discord.Forbidden:
-                # 万が一DMがブロックされていた場合のバックアップ対策
-                await message.channel.send(f"🔄 パスワードを変更しました！（※DMが閉じていたため、MWSのログを確認してください）")
+                await message.channel.send(f"🔄 パスワードを変更しました！")
         else:
             await message.channel.send("❌ エラー：この緊急コマンドはBotの【創設者3人】のみが実行できます。")
         return
