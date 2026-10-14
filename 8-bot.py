@@ -508,9 +508,8 @@ async def on_message(message):
             inline=False
         )
         embed.add_field(
-            name="🫆 管理者向けパスワード機能(実行は管理専用サーバーでしてください)",
-            value=("• `!github-repositories` : 開発用GitHubリポジトリのURLを確認する\n"
-                   "• `!supabase-table(quiz_score)` : 全員のクイズの成績を確認する\n"
+            name="🫆 運営向けパスワード機能(実行は運営サーバーでしてください)",
+            value=("• `!password-reset` : botのパスワード変更(あまりに強力なので私にしか権限付与してません)\n"
             ),
             inline=False
         )
