@@ -70,6 +70,64 @@ async def on_ready():
     # ⏱️ タイマーがまだ動いていなければ、ここで起動する
     if not auto_reset_password.is_running():
         auto_reset_password.start()
+# ==========================================
+# 📊 定期ランキング自動発表システム（新機能）
+# ==========================================
+# 💡 hours=24 で24時間ごとに実行。毎日決まった時間に動かしたい場合は time 指定も可能です
+@tasks.loop(hours=24)
+async def auto_announce_ranking():
+    # 💡 クイズが許可されているチャンネルが1つでもあれば、その最初のチャンネルに送信する
+    # サーバー個別設定から、登録されているチャンネルIDを探す
+    for guild_id_str, settings in server_settings.items():
+        channel_ids = settings.get("quiz_channel_ids", [])
+        if not channel_ids:
+            # 古い設定（1つだけ保存する形式）の互換性チェック
+            old_id = settings.get("quiz_channel_id")
+            if old_id:
+                channel_ids = [old_id]
+        
+        if not channel_ids:
+            continue  # チャンネルが1つも登録されていないサーバーはスキップ
+
+        # 許可されている最初のチャンネルを取得
+        target_channel = client.get_channel(channel_ids[0])
+        if target_channel is None:
+            continue
+
+        try:
+            # Supabaseから正解数（correct_count）が多い順に上位5名を取得
+            response = supabase.table("user_scores").select("*").order("correct_count", desc=True).limit(5).execute()
+            
+            if response.data and len(response.data) > 0:
+                # 🎨 Discordに送るオシャレなランキングカード（Embed）を作成
+                embed = discord.Embed(
+                    title="🏆 【毎日発表】クイズ正解数ランキング・トップ5 🏆",
+                    description="現在のサーバー内のクイズ強者たちの成績です！みんなも負けずに挑戦しよう！",
+                    color=discord.Color.gold()
+                )
+                
+                # メダル絵文字のリスト
+                medals = ["🥇 1位", "🥈 2位", "🥉 3位", "✨ 4位", "✨ 5位"]
+                
+                for i, row in enumerate(response.data):
+                    username = row.get("username", "名無し学者")
+                    correct = row.get("correct_count", 0)
+                    wrong = row.get("wrong_count", 0)
+                    
+                    # 順位に応じたメダルを割り当て
+                    rank_label = medals[i] if i < len(medals) else f"🔹 {i+1}位"
+                    
+                    embed.add_field(
+                        name=f"{rank_label}：{username} さん",
+                        value=f"• 正解数: **{correct}回** ⭕ / 不正解: {wrong}回 ❌",
+                        inline=False
+                    )
+                
+                embed.set_footer(text="※ランキングは24時間ごとに自動更新されます。")
+                await target_channel.send(embed=embed)
+                
+        except Exception as e:
+            print(f"定期ランキング発表エラー: {e}")
 
 # ==========================================
 # 📊 状態管理変数
