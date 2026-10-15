@@ -61,16 +61,16 @@
         }
     },
     "長文読解":{
-        "次の英文を読み、設問に答えなさい。Capitalism isn't necessarily a good system. However, the communist system also has at least some problems. Humans are inherently greedy creatures.  この文章で筆者が伝えたいことを記号で選び、1つ答えなさい。ア：資本主義も共産主義も悪い制度ではない。 イ：物事を一方的な視点から見て批判してはいけない。 ウ：共産主義には、偏っていない人材が必要だ。 エ：資本主義も共産主義も、人間が貪欲である限り問題がある。": {
+        "次の英文を読み、設問に答えなさい。Capitalism isn't necessarily a good system. However, the communist system also has at least some problems. Humans are inherently greedy creatures.  この文章で筆者が伝えたいことを記号で選び、1つ答えなさい。あ：資本主義も共産主義も悪い制度ではない。 い：物事を一方的な視点から見て批判してはいけない。 う：共産主義には、偏っていない人材が必要だ。 え：資本主義も共産主義も、人間が貪欲である限り問題がある。": {
             "type": "choice",
             "options": [
-                "ア",
-                "イ",
-                "ウ",
-                "エ"
+                "あ",
+                "い",
+                "う",
+                "え"
             ],
-            "answer": "エ",
-            "explanation": "アは本文中に資本主義も共産主義もいいシステムとは言えないと言っているので誤り。イは本文中に書かれていない内容であるため誤り。ウは共産主義の人材に関する言及がないため誤り。エは本文中の内容と合致するため正しい。よって答えはエ。",
+            "answer": "え",
+            "explanation": "あは本文中に資本主義も共産主義もいいシステムとは言えないと言っているので誤り。いは本文中に書かれていない内容であるため誤り。うは共産主義の人材に関する言及がないため誤り。えは本文中の内容と合致するため正しい。よって答えはえ。",
             "hint": "どのような要素が入っているかを考えながら解き進めましょう。"
         }
     }
