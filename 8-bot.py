@@ -172,17 +172,17 @@ class AcademicQuizView(discord.ui.View):
 
         if is_correct:
             # スコアの更新とロールチェックを実行
-            update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message)
+            update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
             await interaction.channel.send(f"💡 {interaction.user.mention} **正解！お見事です（学術クイズ）！🎉**")
             await interaction.channel.send(f'<:hint:1556661937356546069> 【解説】\n{self.explanation}')
         else:
-            update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message)
+            update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
             await interaction.channel.send(f"😢 {interaction.user.mention} **不正解です...。もう一度挑戦してみてください！**")
             await interaction.channel.send(f"正解は **【 {self.correct_answer} 】** でした！")
         
         # ビューの処理を完全に終了する
         self.stop()
-        
+
 # ==========================================
 # 🔑 管理者認証用の入力フォーム（モーダル画面）
 # ==========================================
@@ -218,8 +218,8 @@ if os.path.exists("quiz_dictionary.json"):
     with open("quiz_dictionary.json", "r", encoding="utf-8") as f:
         quiz_dictionary = json.load(f)
 
-def update_db_score(user_id: int, username: str, is_correct: bool, message: discord.Message = None):
-    """正解・不正解時にクラウドデータベースのカウントを+1（アップサート）し、個人の役職設定をチェックする関数"""
+def update_db_score(user_id: int, username: str, is_correct: bool, message: discord.Message = None, member: discord.Member = None):
+    """正解・不正解時にクラウドデータベースのカウントを+1し、個人の役職設定をチェックする関数"""
     try:
         response = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
         
@@ -230,7 +230,6 @@ def update_db_score(user_id: int, username: str, is_correct: bool, message: disc
             current = response.data[0]
             correct = current["correct_count"] + (1 if is_correct else 0)
             wrong = current["wrong_count"] + (0 if is_correct else 1)
-            # 💡 データベースからユーザー個人のオンオフ設定を読み込む
             user_rank_preference = current.get("is_rank_enabled", True)
         else:
             correct = 1 if is_correct else 0
@@ -242,36 +241,48 @@ def update_db_score(user_id: int, username: str, is_correct: bool, message: disc
             "username": username,
             "correct_count": correct,
             "wrong_count": wrong,
-            "is_rank_enabled": user_rank_preference,  # 💡 設定値を維持して保存
+            "is_rank_enabled": user_rank_preference,
             "updated_at": "now()"
         }).execute()
-        print(f"【システムログ】{username} さんのデータをSupabaseに保存しました。")
+        print(f"【システムログ】{username} さんのデータをSupabaseに保存しました。（現在: {correct}問正解）")
 
         # 👑 役職昇進チェック
-        # 💡「ユーザー個人が役職をオンにしている場合」のみロールを付与する
-        if user_rank_preference and is_correct and message and message.guild:
-            import asyncio
-            
-            async def assign_rank_role():
-                role_name = None
-                if correct >= 120:
-                    role_name = "永世博士"
-                elif correct >= 80:
-                    role_name = "博士博士号"
-                elif correct >= 50:
-                    role_name = "物知り博士"
-                elif correct >= 30:
-                    role_name = "クイズ達人"
-                elif correct >= 10:
-                    role_name = "見習い学者"
+        if is_correct and message and message.guild and member:
+            # Bot自身（client.user.id）が紛れ込んだ場合は完全に除外する
+            if member.id == client.user.id:
+                return
+
+            server_enabled = is_rank_enabled_for_guild(message.guild.id)
+            if server_enabled and user_rank_preference:
                 
-                if role_name:
-                    role = discord.utils.get(message.guild.roles, name=role_name)
-                    if role and role not in message.author.roles:
-                        await message.author.add_roles(role)
-                        await message.channel.send(f"🆙 **【ランクアップ！】** {message.author.mention} さんの累計正解数が **{correct}問** に達したため、**【{role_name}】** に昇進しました！ 🎉")
-            
-            asyncio.run_coroutine_threadsafe(assign_rank_role(), client.loop)
+                async def assign_rank_role():
+                    # 💡 条件判定をシンプルにし、現在の正確な正解数（correct）でチェック
+                    role_name = None
+                    if correct >= 120:
+                        role_name = "永世博士"
+                    elif correct >= 80:
+                        role_name = "博士博士号"
+                    elif correct >= 50:
+                        role_name = "物知り博士"
+                    elif correct >= 30:
+                        role_name = "クイズ達人"
+                    elif correct >= 10:
+                        role_name = "見習い学者"
+                    
+                    if role_name:
+                        role = discord.utils.get(message.guild.roles, name=role_name)
+                        if role:
+                            # 💡 ターゲットを message.author ではなく「member（ボタンを押した人）」に修正
+                            if role not in member.roles:
+                                try:
+                                    await member.add_roles(role)
+                                    await message.channel.send(f"🆙 **【ランクアップ！】** {member.mention} さんの累計正解数が **{correct}問** に達したため、**【{role_name}】** に昇進しました！ 🎉")
+                                except discord.Forbidden:
+                                    await message.channel.send(f"⚠️ 権限エラー: Botの役職順位が低いため、**【{role_name}】** を付与できませんでした。")
+                                except Exception as e:
+                                    print(f"ロール付与失敗: {e}")
+                
+                client.loop.create_task(assign_rank_role())
 
     except Exception as e:
         print(f"Supabase書き込み/ロール付与エラー: {e}")
@@ -336,12 +347,12 @@ async def on_message(message):
 
         user_id = message.author.id
         if is_correct:
-            update_db_score(user_id, message.author.display_name, is_correct, message)
+            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
             await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です（一般知識）！🎉")
             await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data["explanation"]}')
             current_quiz = None  
         else:
-            update_db_score(user_id, message.author.display_name, is_correct, message)
+            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
             await message.channel.send("不正解です。<:oh_no:1556661209116184686> もう一度挑戦してみてください！")
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
@@ -359,13 +370,13 @@ async def on_message(message):
 
         user_id = message.author.id
         if is_correct:
-            update_db_score(user_id, message.author.display_name, is_correct, message)
+            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
             await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です！🎉📚")
             await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data["explanation"]}')
             current_quiz_academic = None  
             user_status = None
         else:
-            update_db_score(user_id, message.author.display_name, is_correct, message)
+            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
             await message.channel.send("不正解です😢...<:oh_no:1556661209116184686> もう一度挑戦してみてください！")
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
@@ -383,13 +394,13 @@ async def on_message(message):
 
         user_id = message.author.id
         if is_correct:
-            update_db_score(user_id, message.author.display_name, is_correct, message)
+            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
             await message.channel.send("<a:marugame:1556977377601527920> ⭕ 正解！お見事です！ 🎉")
             await message.channel.send(f'💡 【解説】 \n{quiz_data["explanation"]}')
             current_quiz_junior_high = None  
             user_status = None  
         else:
-            update_db_score(user_id, message.author.display_name, is_correct, message)
+            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
             await message.channel.send(" 不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！")
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】 \n{quiz_data["hint"]}')
         return
