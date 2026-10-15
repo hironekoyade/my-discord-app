@@ -124,17 +124,14 @@ if os.path.exists("quiz_academic.json"):
 # 💡 ボタンコンポーネントクラスを定義（フリーズ＆色固定 対策版）
 # ==========================================
 class AcademicQuizButton(discord.ui.Button):
-    # ⚠️ 一番最初の「青にする処理」自体を、ここで完全に書き換えます！
     def __init__(self, label, view_obj, style):
-        # ここを style=style にすることで、最初から絶対に指定した色になります
         super().__init__(label=label, style=style)
         self.view_obj = view_obj
 
     async def callback(self, interaction: discord.Interaction):
-        # 💡 Discordのフリーズ対策：ボタンを押されたら、即座に「考え中...」のサインを出して3秒制限を解除する
+        # 💡 Discordのフリーズ対策：「考え中...」のサインを出して3秒制限を解除
         await interaction.response.defer()
-        
-        # その後、正誤判定のメッセージを送る
+        # 👑 エラーの原因だった正誤判定処理を呼び出す
         await self.view_obj.process_choice(interaction, self.label)
 
 
@@ -147,7 +144,7 @@ class AcademicQuizView(discord.ui.View):
         shuffled_options = options.copy()
         random.shuffle(shuffled_options)
         
-        # 🎨 4つのボタンに別々の色（スタイル）を用意する
+        # 🎨 4つのボタンに別々の色（スタイル）を用意
         button_styles = [
             discord.ButtonStyle.primary,   # 青
             discord.ButtonStyle.success,   # 緑
@@ -155,14 +152,37 @@ class AcademicQuizView(discord.ui.View):
             discord.ButtonStyle.danger     # 赤
         ]
         
-        # enumerateを使って、選択肢と色を1つずつペアにして取り出す
         for i, opt in enumerate(shuffled_options):
             current_style = button_styles[i % 4]
-            
-            # 💡 ボタンを作るときに、引数として「色（current_style）」を直接渡す！
             btn = AcademicQuizButton(label=opt, view_obj=self, style=current_style)
             self.add_item(btn)
 
+    # 🛠️ 【追加】ボタンが押されたときの正誤判定ロジック（これが抜けていました）
+    async def process_choice(self, interaction: discord.Interaction, chosen_label: str):
+        # すでにボタンが押された後なので、すべてのボタンを無効化（連打防止）
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+        
+        # メッセージを更新してボタンを押せなくする
+        await interaction.message.edit(view=self)
+
+        user_id = interaction.user.id
+        is_correct = (chosen_label == self.correct_answer)
+
+        if is_correct:
+            # スコアの更新とロールチェックを実行
+            update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message)
+            await interaction.channel.send(f"💡 {interaction.user.mention} **正解！お見事です（学術クイズ）！🎉**")
+            await interaction.channel.send(f'<:hint:1556661937356546069> 【解説】\n{self.explanation}')
+        else:
+            update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message)
+            await interaction.channel.send(f"😢 {interaction.user.mention} **不正解です...。もう一度挑戦してみてください！**")
+            await interaction.channel.send(f"正解は **【 {self.correct_answer} 】** でした！")
+        
+        # ビューの処理を完全に終了する
+        self.stop()
+        
 # ==========================================
 # 🔑 管理者認証用の入力フォーム（モーダル画面）
 # ==========================================
