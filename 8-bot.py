@@ -70,6 +70,10 @@ async def on_ready():
     # ⏱️ タイマーがまだ動いていなければ、ここで起動する
     if not auto_reset_password.is_running():
         auto_reset_password.start()
+        
+    # 📊 【追加】ランキング自動発表タイマーを起動
+    if not auto_announce_ranking.is_running():
+        auto_announce_ranking.start()
 # ==========================================
 # 📊 定期ランキング自動発表システム（新機能）
 # ==========================================
