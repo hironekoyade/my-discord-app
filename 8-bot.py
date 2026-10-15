@@ -334,8 +334,16 @@ async def on_message(message):
         else:
             return  
 
-    # 🎯 2. 一般知識クイズ解答判定 （末尾に message を追加）
+    # ==========================================
+    # 🎯 クイズの解答判定エリア（出題中のみ実行するように厳格化）
+    # ==========================================
+
+    # 1. 一般知識クイズの解答判定
     if current_quiz is not None:
+        # メッセージ送信者がBot自身、または他のBot（Dynoなど）の場合は完全に無視する
+        if message.author.bot:
+            return
+
         quiz_data = quiz_dictionary[current_quiz]
         is_correct = False
         if isinstance(quiz_data["answer"], list):
@@ -357,8 +365,11 @@ async def on_message(message):
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
 
-    # 🎯 2.5 学術クイズ（テキスト形式）の解答判定 （末尾に message を追加）
+    # 2. 学術クイズ（テキスト入力形式）の解答判定
     elif user_status == "academic_quiz_active" and current_quiz_academic is not None:
+        if message.author.bot:
+            return
+
         quiz_data = current_quiz_academic
         is_correct = False
         if isinstance(quiz_data["answer"], list):
@@ -381,8 +392,11 @@ async def on_message(message):
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
         return
 
-    # 🎯 3. 中学クイズ解答判定 （末尾に message を追加）
+    # 3. 中学クイズの解答判定
     elif user_status == "quiz_active" and current_quiz_junior_high is not None:
+        if message.author.bot:
+            return
+
         is_correct = False
         quiz_data = current_quiz_junior_high
         if isinstance(quiz_data["answer"], list):
