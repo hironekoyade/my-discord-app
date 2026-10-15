@@ -451,17 +451,26 @@ async def on_message(message):
             await message.channel.send("❌ この設定コマンドは、Botの管理者、またはサーバー管理者のみ実行できます。")
         return
 
-    # 🚧 【鉄壁のガード：複数チャンネル対応版】
-    if message.guild:
+    # 💡 2. 先頭が「!」のコマンドは、クイズの『解答中』の時だけ判定をスルー
+    if message.content.startswith("!") and message.content not in ["!ストップ", "!stop", "!cancel"]:
+        if current_quiz is None and current_quiz_junior_high is None and current_quiz_academic is None and user_status is None:
+            pass 
+        else:
+            return  
+
+    # 🚧 【鉄壁のガード：複数チャンネル対応版】（クイズ判定の直前に移動）
+    # ※ただし、クイズを「新しく開始するコマンド」や「解答判定」の時だけチャンネル制限をかけます
+    is_quiz_command = message.content in ["!中学クイズ", "!中学クイズおまかせ", "!学術クイズ", "!一般クイズ"]
+    is_answering = (current_quiz is not None) or (user_status in ["quiz_active", "academic_quiz_active", "select_grade", "select_subject", "select_range", "select_content"])
+
+    if message.guild and (is_quiz_command or is_answering):
         guild_id_str = str(message.guild.id)
-        # 登録されているチャンネルの「IDリスト」を取得
         target_channel_ids = server_settings.get(guild_id_str, {}).get("quiz_channel_ids", [])
         
-        # リストが空ではない（＝1つ以上チャンネルが登録されている）場合のみガードを発動
         if target_channel_ids:
-            # 今喋ったチャンネルのIDが、リストの中に「含まれていない」場合は即座に終了
             if message.channel.id not in target_channel_ids:
-                return
+                return # クイズ関連のときだけ、指定チャンネル以外なら無視する
+
     # ==========================================
     # 🎯 クイズの解答判定エリア（出題中のみ実行するように厳格化）
     # ==========================================
