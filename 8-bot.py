@@ -322,9 +322,16 @@ async def on_message(message):
             await message.channel.send("❌ エラー：この緊急コマンドはBotの【創設者3人】のみが実行できます。")
         return
 
-    # 🛠️ 【新機能】専用チャンネルの設定コマンド（管理者用）
-    if message.content == "!set-quiz-channel":
-        ADMIN_USER_ID = [1385634725460316273, 1551496753088561238, 1446830807007101102, 1188811877447372881, 1190487161875742781, 1218614290542497967]
+    # 🛠️ 【新機能】専用チャンネルの「追加」コマンド（管理者用）
+    if message.content == "!add-quiz-channel":
+        ADMIN_USER_ID = [
+            1385634725460316273, 
+            1551496753088561238,  
+            1446830807007101102,
+            1188811877447372881,
+            1190487161875742781,
+            1218614290542497967
+        ]
         is_server_admin = message.author.guild_permissions.administrator if message.guild else False
         
         if (message.author.id in ADMIN_USER_ID) or is_server_admin:
@@ -335,33 +342,64 @@ async def on_message(message):
             guild_id_str = str(message.guild.id)
             if guild_id_str not in server_settings:
                 server_settings[guild_id_str] = {}
-                
-            # コマンドが打たれたチャンネルのIDを保存
-            server_settings[guild_id_str]["quiz_channel_id"] = message.channel.id
-            save_server_settings()
             
-            await message.channel.send(f"🎯 **チャンネル設定完了：** 以降、このサーバーでのクイズ機能（出題・解答判定）は **{message.channel.mention}** 限定で動作します！")
+            # リスト形式で保存する（まだリストがない場合は新しく作る）
+            if "quiz_channel_ids" not in server_settings[guild_id_str]:
+                server_settings[guild_id_str]["quiz_channel_ids"] = []
+                
+            current_channels = server_settings[guild_id_str]["quiz_channel_ids"]
+            
+            if message.channel.id in current_channels:
+                await message.channel.send("⚠️ このチャンネルはすでにクイズ専用チャンネルとして登録されています。")
+            else:
+                current_channels.append(message.channel.id)
+                save_server_settings()
+                await message.channel.send(f"🎯 **チャンネルを追加しました：** 以降、**{message.channel.mention}** でもクイズ機能が動作します！")
         else:
             await message.channel.send("❌ この設定コマンドは、Botの管理者、またはサーバー管理者のみ実行できます。")
         return
 
-    # 🚧 【鉄壁のガード】専用チャンネル以外でのクイズ誤爆を完全にシャットアウト
+    # 🛠️ 【新機能】専用チャンネルの「削除」コマンド（管理者用）
+    if message.content == "!remove-quiz-channel":
+        ADMIN_USER_ID = [
+            1385634725460316273, 
+            1551496753088561238,  
+            1446830807007101102,
+            1188811877447372881,
+            1190487161875742781,
+            1218614290542497967
+        ]
+        is_server_admin = message.author.guild_permissions.administrator if message.guild else False
+        
+        if (message.author.id in ADMIN_USER_ID) or is_server_admin:
+            if message.guild is None:
+                await message.channel.send("❌ このコマンドはサーバー内でのみ実行できます。")
+                return
+            
+            guild_id_str = str(message.guild.id)
+            current_channels = server_settings.get(guild_id_str, {}).get("quiz_channel_ids", [])
+            
+            if message.channel.id in current_channels:
+                current_channels.remove(message.channel.id)
+                save_server_settings()
+                await message.channel.send(f"❌ **チャンネルを解除しました：** 以降、**{message.channel.mention}** ではクイズ機能が動作しません。")
+            else:
+                await message.channel.send("⚠️ このチャンネルはクイズ専用チャンネルとして登録されていません。")
+        else:
+            await message.channel.send("❌ この設定コマンドは、Botの管理者、またはサーバー管理者のみ実行できます。")
+        return
+
+    # 🚧 【鉄壁のガード：複数チャンネル対応版】
     if message.guild:
         guild_id_str = str(message.guild.id)
-        # サーバー設定に専用チャンネルが登録されているか確認
-        target_channel_id = server_settings.get(guild_id_str, {}).get("quiz_channel_id")
+        # 登録されているチャンネルの「IDリスト」を取得
+        target_channel_ids = server_settings.get(guild_id_str, {}).get("quiz_channel_ids", [])
         
-        if target_channel_id is not None:
-            # 今喋ったチャンネルが、設定された専用チャンネルと違う場合は「すべての処理を即座に終了」
-            if message.channel.id != target_channel_id:
+        # リストが空ではない（＝1つ以上チャンネルが登録されている）場合のみガードを発動
+        if target_channel_ids:
+            # 今喋ったチャンネルのIDが、リストの中に「含まれていない」場合は即座に終了
+            if message.channel.id not in target_channel_ids:
                 return
-
-    # 💡 2. 先頭が「!」のコマンドは、クイズの『解答中』の時だけ判定をスルー
-    if message.content.startswith("!") and message.content not in ["!ストップ", "!stop", "!cancel"]:
-        if current_quiz is None and current_quiz_junior_high is None and current_quiz_academic is None and user_status is None:
-            pass 
-        else:
-            return  
     # ==========================================
     # 🎯 クイズの解答判定エリア（出題中のみ実行するように厳格化）
     # ==========================================
@@ -678,6 +716,8 @@ async def on_message(message):
             value=("• `!github-repositories` : 開発用GitHubリポジトリのURLを確認する\n"
                    "• `!supabase-table(quiz_score)` : 全員のクイズの成績を確認する\n"
                    "• `!server-rank-toggle` : サーバーのクイズ正解数による役職付与を有効化/無効化\n"
+                   "• `!add-quiz-channel` : クイズ用サーバーを選択(このコマンドの実行は選択したいサーバーで行ってください)\n"
+                   "• `!remove-quiz-channel` : クイズ用サーバーを削除(このコマンドの実行は選択したいサーバーで行ってください)\n"
             ),
             inline=False
         )
