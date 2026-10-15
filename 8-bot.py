@@ -287,53 +287,81 @@ def update_db_score(user_id: int, username: str, is_correct: bool, message: disc
     except Exception as e:
         print(f"Supabase書き込み/ロール付与エラー: {e}")
 
-# 💡 1. デコレータを必ず付ける
 @client.event
 async def on_message(message):
     global current_quiz, current_quiz_junior_high, current_quiz_academic
     global user_status, selected_grade, selected_subject, selected_range, selected_content
 
-    # 🔑 管理者認証ボタンを呼び出す新しいコマンド
+    # 1. 自分のメッセージや他のBot（Dynoなど）は最初に完全無視
+    if message.author.bot:
+        return
+
+    # 🔑 管理者認証ボタンコマンド
     if message.content == "!admin":
         class AuthButtonView(discord.ui.View):
             def __init__(self):
                 super().__init__(timeout=60.0)
-            
             @discord.ui.button(label="👑 管理者認証フォームを開く", style=discord.ButtonStyle.primary)
             async def open_modal(self, button_interaction: discord.Interaction, button: discord.ui.Button):
                 await button_interaction.response.send_modal(AdminAuthModal())
-
         await message.channel.send("以下のボタンを押して、パスワードを入力してください！", view=AuthButtonView())
         return
 
-    if message.author == client.user:
-        return
-
-    # 🔄 【トリガー2】元の3人だけが使えるパスワード強制リセットコマンド
+    # 🔄 パスワード強制リセットコマンド
     if message.content == "!password-reset":
         if message.author.id in ORIGINAL_ADMINS:
             global ADMIN_PASSWORD
-            
-            # 🌟 ここも「英数字6文字」を生成するコードに書き換える！
             characters = string.ascii_letters + string.digits
             ADMIN_PASSWORD = "".join(random.choices(characters, k=6))
-            
             try:
                 await message.author.send(f"👑 パスワードを強制リセットしました：【{ADMIN_PASSWORD}】")
-                await message.channel.send("🔄 創設者権限により、パスワードをランダムな新しい値に変更しました！（実行者にDMを送信しました）")
+                await message.channel.send("🔄 パスワードをランダムな新しい値に変更しました！（実行者にDM送信済）")
             except discord.Forbidden:
                 await message.channel.send(f"🔄 パスワードを変更しました！")
         else:
             await message.channel.send("❌ エラー：この緊急コマンドはBotの【創設者3人】のみが実行できます。")
         return
 
-    # 💡 2. 先頭が「!」のコマンドは、クイズの『解答中』の時だけ判定をスルーさせるように修正
+    # 🛠️ 【新機能】専用チャンネルの設定コマンド（管理者用）
+    if message.content == "!set-quiz-channel":
+        ADMIN_USER_ID = [1385634725460316273, 1551496753088561238, 1446830807007101102, 1188811877447372881, 1190487161875742781, 1218614290542497967]
+        is_server_admin = message.author.guild_permissions.administrator if message.guild else False
+        
+        if (message.author.id in ADMIN_USER_ID) or is_server_admin:
+            if message.guild is None:
+                await message.channel.send("❌ このコマンドはサーバー内でのみ実行できます。")
+                return
+            
+            guild_id_str = str(message.guild.id)
+            if guild_id_str not in server_settings:
+                server_settings[guild_id_str] = {}
+                
+            # コマンドが打たれたチャンネルのIDを保存
+            server_settings[guild_id_str]["quiz_channel_id"] = message.channel.id
+            save_server_settings()
+            
+            await message.channel.send(f"🎯 **チャンネル設定完了：** 以降、このサーバーでのクイズ機能（出題・解答判定）は **{message.channel.mention}** 限定で動作します！")
+        else:
+            await message.channel.send("❌ この設定コマンドは、Botの管理者、またはサーバー管理者のみ実行できます。")
+        return
+
+    # 🚧 【鉄壁のガード】専用チャンネル以外でのクイズ誤爆を完全にシャットアウト
+    if message.guild:
+        guild_id_str = str(message.guild.id)
+        # サーバー設定に専用チャンネルが登録されているか確認
+        target_channel_id = server_settings.get(guild_id_str, {}).get("quiz_channel_id")
+        
+        if target_channel_id is not None:
+            # 今喋ったチャンネルが、設定された専用チャンネルと違う場合は「すべての処理を即座に終了」
+            if message.channel.id != target_channel_id:
+                return
+
+    # 💡 2. 先頭が「!」のコマンドは、クイズの『解答中』の時だけ判定をスルー
     if message.content.startswith("!") and message.content not in ["!ストップ", "!stop", "!cancel"]:
         if current_quiz is None and current_quiz_junior_high is None and current_quiz_academic is None and user_status is None:
             pass 
         else:
             return  
-
     # ==========================================
     # 🎯 クイズの解答判定エリア（出題中のみ実行するように厳格化）
     # ==========================================
