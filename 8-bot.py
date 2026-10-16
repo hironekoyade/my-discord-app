@@ -54,12 +54,12 @@ print(f"【デバッグ】読み込んだKEY: {SUPABASE_KEY[:10] if SUPABASE_KEY
 @tasks.loop(hours=24)
 async def auto_reset_password():
     global ADMIN_PASSWORD
-# 英大文字・小文字・数字をすべて混ぜたおもちゃ箱を作る
-characters = string.ascii_letters + string.digits
+    # 英大文字・小文字・数字をすべて混ぜたおもちゃ箱を作る
+    characters = string.ascii_letters + string.digits
 
-# そこからランダムに6文字を選んで合体させる
-ADMIN_PASSWORD = "".join(random.choices(characters, k=6))
-print(f"【🔑定期リセット】24時間が経過したため、パスワードを自動変更しました: {ADMIN_PASSWORD}")
+    # そこからランダムに6文字を選んで合体させる
+    ADMIN_PASSWORD = "".join(random.choices(characters, k=6))
+    print(f"【🔑定期リセット】24時間が経過したため、パスワードを自動変更しました: {ADMIN_PASSWORD}")
 
 # Botが起動したときに、上のタイマーをスタートさせる
 @client.event
@@ -206,34 +206,34 @@ class AcademicQuizView(discord.ui.View):
         shuffled_options = options.copy()
         random.shuffle(shuffled_options)
         
-        # 🎨 4つのボタンに別々の色（スタイル）を用意
+        # 🎨 ボタンに使う色（スタイル）のリスト
         button_styles = [
             discord.ButtonStyle.primary,   # 青
             discord.ButtonStyle.success,   # 緑
             discord.ButtonStyle.secondary, # グレー
-            discord.ButtonStyle.danger     # 赤
+            discord.ButtonStyle.danger,    # 赤
+            discord.ButtonStyle.primary    # 5個目は青（またはお好みの色に！）
         ]
         
+        # 💡 enumerateを使って、選択肢が何個あっても（5個でも）自動ですべてボタン化する
         for i, opt in enumerate(shuffled_options):
-            current_style = button_styles[i % 4]
+            # スタイルが足りなくなってもエラーにならないように % でループさせる
+            current_style = button_styles[i % len(button_styles)]
             btn = AcademicQuizButton(label=opt, view_obj=self, style=current_style)
             self.add_item(btn)
 
-    # 🛠️ 【追加】ボタンが押されたときの正誤判定ロジック（これが抜けていました）
+    # ボタンが押されたときの正誤判定ロジック（変更なし）
     async def process_choice(self, interaction: discord.Interaction, chosen_label: str):
-        # すでにボタンが押された後なので、すべてのボタンを無効化（連打防止）
         for item in self.children:
             if isinstance(item, discord.ui.Button):
                 item.disabled = True
         
-        # メッセージを更新してボタンを押せなくする
         await interaction.message.edit(view=self)
 
         user_id = interaction.user.id
         is_correct = (chosen_label == self.correct_answer)
 
         if is_correct:
-            # スコアの更新とロールチェックを実行
             update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
             await interaction.channel.send(f"💡 {interaction.user.mention} **正解！お見事です（学術クイズ）！🎉**")
             await interaction.channel.send(f'<:hint:1556661937356546069> 【解説】\n{self.explanation}')
@@ -242,8 +242,78 @@ class AcademicQuizView(discord.ui.View):
             await interaction.channel.send(f"😢 {interaction.user.mention} **不正解です...。もう一度挑戦してみてください！**")
             await interaction.channel.send(f"正解は **【 {self.correct_answer} 】** でした！")
         
-        # ビューの処理を完全に終了する
         self.stop()
+
+class MultiChoiceQuizButton(discord.ui.Button):
+    def __init__(self, label, view_obj, style):
+        super().__init__(label=label, style=style)
+        self.view_obj = view_obj
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        await self.view_obj.process_choice(interaction, self)
+
+
+class MultiChoiceQuizView(discord.ui.View):
+    def __init__(self, correct_answers, explanation, options):
+        super().__init__(timeout=60.0)
+        self.correct_answers = correct_answers  # 💡 正解のリスト（例: ["A", "B"]）
+        self.explanation = explanation
+        self.selected_buttons = []  # ユーザーが選択したボタンを記録
+        
+        shuffled_options = options.copy()
+        random.shuffle(shuffled_options)
+        
+        button_styles = [
+            discord.ButtonStyle.primary,
+            discord.ButtonStyle.success,
+            discord.ButtonStyle.secondary,
+            discord.ButtonStyle.danger,
+            discord.ButtonStyle.primary
+        ]
+        
+        for i, opt in enumerate(shuffled_options):
+            current_style = button_styles[i % len(button_styles)]
+            btn = MultiChoiceQuizButton(label=opt, view_obj=self, style=current_style)
+            self.add_item(btn)
+
+    async def process_choice(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # すでに選ばれているボタンをもう一度押した場合は解除
+        if button in self.selected_buttons:
+            self.selected_buttons.remove(button)
+            button.style = discord.ButtonStyle.primary  # 元の色（またはお好み）に戻す
+        else:
+            # 2度押しでなければ選択リストに追加
+            self.selected_buttons.append(button)
+            button.style = discord.ButtonStyle.success  # 選択中として緑色にする
+            
+        # 画面上のボタンの見た目を更新
+        await interaction.message.edit(view=self)
+
+        # 2つのボタンが選択されたら正誤判定へ
+        if len(self.selected_buttons) == 2:
+            for item in self.children:
+                if isinstance(item, discord.ui.Button):
+                    item.disabled = True
+            await interaction.message.edit(view=self)
+
+            chosen_labels = [btn.label for btn in self.selected_buttons]
+            user_id = interaction.user.id
+            
+            # 2つの選択肢が、正解リストと完全に一致しているか判定（順不同）
+            is_correct = set(chosen_labels) == set(self.correct_answers)
+
+            if is_correct:
+                update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
+                await interaction.channel.send(f"💡 {interaction.user.mention} **正解！お見事です（特別クイズ）！🎉**")
+                await interaction.channel.send(f'<:hint:1556661937356546069> 【解説】\n{self.explanation}')
+            else:
+                update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
+                await interaction.channel.send(f"😢 {interaction.user.mention} **不正解です...。**")
+                correct_text = "、".join([f"【 {ans} 】" for ans in self.correct_answers])
+                await interaction.channel.send(f"正解は {correct_text} の2つでした！")
+            
+            self.stop()
 
 # ==========================================
 # 🔑 管理者認証用の入力フォーム（モーダル画面）
@@ -386,16 +456,9 @@ async def on_message(message):
 
     # 🛠️ 【新機能】専用チャンネルの「追加」コマンド（管理者用）
     if message.content == "!add-quiz-channel":
-        ADMIN_USER_ID = [
-            1385634725460316273, 
-            1551496753088561238,  
-            1446830807007101102,
-            1188811877447372881,
-            1190487161875742781,
-            1218614290542497967
-        ]
         is_server_admin = message.author.guild_permissions.administrator if message.guild else False
         
+        # 💡 固定リストの代入を削除し、既存の ADMIN_USER_ID リストをそのまま参照
         if (message.author.id in ADMIN_USER_ID) or is_server_admin:
             if message.guild is None:
                 await message.channel.send("❌ このコマンドはサーバー内でのみ実行できます。")
@@ -423,16 +486,9 @@ async def on_message(message):
 
     # 🛠️ 【新機能】専用チャンネルの「削除」コマンド（管理者用）
     if message.content == "!remove-quiz-channel":
-        ADMIN_USER_ID = [
-            1385634725460316273, 
-            1551496753088561238,  
-            1446830807007101102,
-            1188811877447372881,
-            1190487161875742781,
-            1218614290542497967
-        ]
         is_server_admin = message.author.guild_permissions.administrator if message.guild else False
         
+        # 💡 固定リストの代入を削除
         if (message.author.id in ADMIN_USER_ID) or is_server_admin:
             if message.guild is None:
                 await message.channel.send("❌ このコマンドはサーバー内でのみ実行できます。")
@@ -655,23 +711,25 @@ async def on_message(message):
         q_text = chosen["text"]
         q_data = chosen["data"]
         
+        # 💡 データの種類に応じてビューを切り替える
         if q_data["type"] == "choice":
             view = AcademicQuizView(q_data["answer"], q_data["explanation"], q_data["options"])
-            
+            # 「学術クイズ」という固定文字を、JSONのカテゴリ名（ chosen['category'] ）に動的変更！
+            await message.channel.send(f"🎯 **【クイズ - {chosen['category']}】**（4択ボタン形式）\n\n**問題：{q_text}**", view=view)
+            return
+
+
+        elif q_data["type"] == "multi_choice":
+            view = MultiChoiceQuizView(q_data["answer"], q_data["explanation"], q_data["options"])
+            # ここもどんなジャンル（ゲーム、地理、アニメ等）でもマッチする表記に修正！
             await message.channel.send(
-                f"🎓 **【学術クイズ - {chosen['category']}】**（4択ボタン形式）\n\n**問題：{q_text}**", 
+                f"🔥 **【特別クイズ - {chosen['category']}】**（5択・2つ選択形式）\n\n"
+                f"**問題：{q_text}**\n\n"
+                f"⚠️ **【ルール】正しいと思う選択肢のボタンを【2つ】押してください！**", 
                 view=view
             )
             return
 
-        elif q_data["type"] == "text":
-            current_quiz_academic = q_data
-            user_status = "academic_quiz_active"
-            
-            await message.channel.send(
-                f"🎓 **【学術クイズ - {chosen['category']}】**（テキスト入力形式）\n\n**問題：{q_text}**"
-            )
-            return
 
     if message.content == "!中学クイズ":
         user_status = "select_grade"
@@ -805,33 +863,16 @@ async def on_message(message):
 
     # 🛠️ 管理者専用：GitHubリポジトリ確認コマンド
     if message.content == "!github-repositories":
-        ADMIN_USER_ID = [
-            1385634725460316273, 
-            1551496753088561238,  
-            1446830807007101102,
-            1446830807007101102,
-            1188811877447372881,
-            1190487161875742781,
-            1218614290542497967
-        ]
-        
+        # 💡 固定リストの代入を削除
         if message.author.id in ADMIN_USER_ID:
             await message.channel.send("リポジトリです。https://github.com")
         else:
             await message.channel.send("❌ このコマンドはBotの管理者のみが実行できます。")
         return
 
-            # 🛠️ 管理者専用：Supabaseのスコア表＆管理画面ボタンを表示する独立コマンド
+    # 🛠️ 管理者専用：Supabaseのスコア表＆管理画面ボタンを表示する独立コマンド
     if message.content == "!supabase-table(quiz_score)":
-        ADMIN_USER_ID = [
-            1385634725460316273,  
-            1551496753088561238,   
-            1446830807007101102,
-            1188811877447372881,
-            1190487161875742781,
-            1218614290542497967
-        ]
-        
+        # 💡 固定リストの代入を削除
         if message.author.id in ADMIN_USER_ID:
             await message.channel.send("📊 **管理者用メニュー：全ユーザークイズ成績一覧を取得中...**")
             
@@ -880,15 +921,7 @@ async def on_message(message):
             await message.channel.send("❌ このコマンドはサーバー内でのみ実行できます。")
             return
 
-        ADMIN_USER_ID = [
-            1385634725460316273,  
-            1551496753088561238,   
-            1446830807007101102,
-            1188811877447372881,
-            1190487161875742781,
-            1218614290542497967
-        ]
-
+        # 💡 固定リストの代入を削除
         is_server_admin = message.author.guild_permissions.administrator
         if (message.author.id in ADMIN_USER_ID) or is_server_admin:
             guild_id_str = str(message.guild.id)
@@ -976,13 +1009,12 @@ async def on_message(message):
         await message.channel.send(random.choice(results))
         return
     elif message.content == "!ランダムに州を選んで":
-        await message.channel.send("州をランダムに選びます！選ばれたのは...")
-        state = ["オセアニア州！", "アフリカ州！", "アジア州！", "ヨーロッパ州！", "北アメリカ州！", "南アメリカ州！"]
-        await message.channel.send(random.choice(state))
+        # （中身は右にズレている）
         return
-        # 🏅 役職の昇進条件を表示する単独コマンド
-        # ⚙️【各サーバー管理者専用】役職昇進機能のオンオフ切り替えコマンド
+
+    # 🟢 ここは揃えたのでこのままでOK！
     elif message.content == "!server-rank-toggle":
+        # 🌟 ここから下の処理は、もう一度右に1マス（Tab）ずらして中に入れる！
         if message.guild is None:
             await message.channel.send("❌ このコマンドはサーバー内でのみ実行できます。")
             return
@@ -1060,10 +1092,6 @@ async def on_message(message):
             await message.channel.send("❌ 設定の変更中にエラーが発生しました。")
             print(f"個人設定切り替えエラー: {e}")
         return
-
-@client.event
-async def on_ready():
-    print(f"ログインしました: {client.user}")
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 client.run(TOKEN)
