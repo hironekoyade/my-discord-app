@@ -323,19 +323,22 @@ class MultiChoiceQuizView(discord.ui.View):
         # ユーザーが選んだ2つの選択肢（テキスト）のリスト
         user_choices = [btn.label for btn in self.selected_buttons]
 
-        # 💡 順不同で、2つの正解が両方とも含まれているかをチェック
+        # 💡 2つの正解が両方とも含まれているかをチェック（順不同）
         is_all_correct = all(ans in user_choices for ans in self.correct_answers)
 
+        # 🚨 ここを修正：True固定ではなく、実際の判定結果（is_all_correct）を正しく関数に引き渡します！
         if is_all_correct:
+            # 見事両方正解なら、is_correct=True としてスコアを+1加算
             update_db_score(user_id, interaction.user.display_name, True, interaction.message, member=interaction.user)
             await interaction.channel.send(f"💡 {interaction.user.mention} **大正解！2つの選択肢を完璧に見抜きました！🎉**")
             await interaction.channel.send(f'<:hint:1556661937356546069> 【解説】\n{self.explanation}')
         else:
+            # 1つでも間違えていたら、is_correct=False として不正解（wrong_count）を+1加算
             update_db_score(user_id, interaction.user.display_name, False, interaction.message, member=interaction.user)
             correct_text = " と ".join([f"【{a}】" for a in self.correct_answers])
             await interaction.channel.send(f"😢 {interaction.user.mention} **残念、不正解です...。**\n正解は {correct_text} でした！")
         
-        # 💡 【ゾンビ化防止ガード】解き終わったので、Botの解答待ちフラグを完全にNoneにクリアする！
+        # 【ゾンビ化防止ガード】解き終わったのでフラグをNoneにクリア
         global current_quiz, current_quiz_junior_high, current_quiz_academic, user_status
         current_quiz = None
         current_quiz_junior_high = None
