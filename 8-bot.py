@@ -241,7 +241,13 @@ class AcademicQuizView(discord.ui.View):
             update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
             await interaction.channel.send(f"😢 {interaction.user.mention} **不正解です...。もう一度挑戦してみてください！**")
             await interaction.channel.send(f"正解は **【 {self.correct_answer} 】** でした！")
-        
+        # 💡 【重要】メッセージを出し終えたので、Botのクイズ解答待ち状態を完全にクリアする
+        global current_quiz, current_quiz_junior_high, current_quiz_academic, user_status
+        current_quiz = None
+        current_quiz_junior_high = None
+        current_quiz_academic = None
+        user_status = None
+
         self.stop()
 
 class MultiChoiceQuizButton(discord.ui.Button):
@@ -312,8 +318,14 @@ class MultiChoiceQuizView(discord.ui.View):
                 await interaction.channel.send(f"😢 {interaction.user.mention} **不正解です...。**")
                 correct_text = "、".join([f"【 {ans} 】" for ans in self.correct_answers])
                 await interaction.channel.send(f"正解は {correct_text} の2つでした！")
-            
-            self.stop()
+                    # 💡 【重要】メッセージを出し終えたので、Botのクイズ解答待ち状態を完全にクリアする
+        global current_quiz, current_quiz_junior_high, current_quiz_academic, user_status
+        current_quiz = None
+        current_quiz_junior_high = None
+        current_quiz_academic = None
+        user_status = None
+
+        self.stop()
 
 # ==========================================
 # 🔑 管理者認証用の入力フォーム（モーダル画面）
