@@ -4,6 +4,7 @@ import discord
 import sympy as sp
 import json
 import string
+import asyncio
 from discord.ext import tasks  # 🌟 インポートはここに綺麗にまとめます
 
 # 全てのインポートが終わった後に、変数を置きます！
@@ -259,6 +260,70 @@ class MultiChoiceQuizButton(discord.ui.Button):
         await interaction.response.defer()
         await self.view_obj.process_choice(interaction, self)
 
+# ==========================================
+# 🎰 UI連動型：ボタン式ルーレットシステム（新機能）
+# ==========================================
+class RouletteButton(discord.ui.Button):
+    def __init__(self):
+        # 💡 初期状態は緑色のカッコいいボタン
+        super().__init__(label="🎰 ルーレットをスタートする！", style=discord.ButtonStyle.success)
+
+    async def callback(self, interaction: discord.Interaction):
+        # ボタンを押した人以外の連打を防ぐため、即座に「考え中...」状態にする
+        await interaction.response.defer()
+        # ビュー側に「ボタンが押されたので演出を開始して」と命令する
+        await self.view_obj.start_rotation(interaction)
+
+
+class RouletteView(discord.ui.View):
+    def __init__(self, options):
+        super().__init__(timeout=120.0) # 2分間誰にも押されなければ自動終了
+        self.options = options
+        
+        # ビューに起動ボタンを取り付ける
+        self.button = RouletteButton()
+        self.button.view_obj = self
+        self.add_item(self.button)
+
+    async def start_rotation(self, interaction: discord.Interaction):
+        # 1. 誰かが押したら、二度と押せないようにボタンを無効化（ロック）する
+        self.button.disabled = True
+        self.button.label = "⏳ 抽選中..."
+        self.button.style = discord.ButtonStyle.secondary
+        await interaction.edit_original_response(view=self)
+
+        # 2. 🎰 チャット欄でのドラムロール演出アニメーション
+        status_msg = await interaction.channel.send(f"🔮 {interaction.user.mention} さんがルーレットを始動しました！")
+        await asyncio.sleep(0.8)
+        
+        await status_msg.edit(content="🎰 ドゥルルルルルルルルルルルル……")
+        await asyncio.sleep(1.2)
+        await status_msg.edit(content="👀 くるくる…… ぴたっ…… 💡")
+        await asyncio.sleep(0.8)
+
+        # 3. 厳正なるランダム抽選
+        chosen = random.choice(self.options)
+        
+        # 4. 🎉 最終結果をドカンとEmbedで発表！
+        embed = discord.Embed(
+            title="🎯 ルーレット抽選結果 🎯",
+            description=f"抽選を実行した人：{interaction.user.mention}\n\n🥇 当選したのは……\n\n🏆 **【 {chosen} 】** です！！ 🎉",
+            color=discord.Color.random()
+        )
+        embed.set_footer(text=f"選択肢の候補：{'、'.join(self.options)}")
+        
+        # 演出用メッセージを消去し、綺麗なカードを送信
+        await status_msg.delete()
+        await interaction.channel.send(embed=embed)
+        
+        # ビューを完全に終了
+        self.stop()
+
+    # 万が一、ボタンが押されずに2分経った場合の安全装置
+    async def on_timeout(self):
+        self.button.disabled = True
+        self.button.label = "❌ 時間切れ（無効）"
+        self.stop()
 
 class MultiChoiceQuizView(discord.ui.View):
     def __init__(self, correct_answers, explanation, options):
@@ -1043,7 +1108,57 @@ async def on_message(message):
     elif message.content == "!ランダムに州を選んで":
         # （中身は右にズレている）
         return
+    # 🎰 ハイブリッド型ボタン式ルーレットコマンド
+    elif message.content.startswith("!ルーレット"):
+        args = message.content.split()
+        options = []
 
+        # 💡 【モード1：既定の数値モード】
+        # !ルーレット 100 のように、数字が1つだけ入力された場合
+        if len(args) == 2 and args[1].isdigit():
+            max_value = int(args[1])
+            if max_value < 2:
+                await message.channel.send("❌ ルーレットの最大値は 2 以上の数字を指定してください。")
+                return
+            # 1 から指定された数字までのリストを自動生成する（例: 1〜100）
+            options = [str(i) for i in range(1, max_value + 1)]
+            mode_text = f"🔢 **既定数値モード（1 〜 {max_value}）**"
+
+        # 💡 【モード2：みんなが入力する自由形式モード】
+        # !ルーレット 焼肉 寿司 ラーメン のように、項目がスペース区切りで複数ある場合
+        elif len(args) >= 2:
+            options = args[1:]
+            mode_text = "💬 **みんなの自由入力モード**"
+
+        # 💡 【使い方の説明】 
+        # ただ「!ルーレット」とだけ打たれた場合
+        else:
+            await message.channel.send(
+                "🎰 **ルーレット機能の使い方** 🎰\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "💬 **① 自由入力モード（みんなで決める）**\n"
+                " ➔ `!ルーレット 焼肉 寿司 ラーメン` (スペースで区切る)\n\n"
+                "🔢 **② 既定数値モード（数字を選ぶ）**\n"
+                " ➔ `!ルーレット 100` (1〜100の中からランダム抽選)"
+            )
+            return
+
+        # 🎰 ボタン付きのビューを作成して送信
+        view = RouletteView(options)
+        
+        # 候補が多すぎる（数字が100個ある等）とチャットが見づらくなるため、最初の15個だけ表示
+        display_options = options[:15]
+        footer_text = ", ".join([f"「{o}」" for o in display_options])
+        if len(options) > 15:
+            footer_text += f" ...他 {len(options) - 15} 個"
+
+        await message.channel.send(
+            f"🎲 **ルーレットがセットされました！**（{mode_text}）\n"
+            f"📋 **候補：** {footer_text}\n"
+            f"準備ができたら、下のボタンを押してスタートしてね！👇", 
+            view=view
+        )
+        return
     # 🟢 ここは揃えたのでこのままでOK！
     elif message.content == "!server-rank-toggle":
         # 🌟 ここから下の処理は、もう一度右に1マス（Tab）ずらして中に入れる！
