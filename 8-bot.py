@@ -284,41 +284,58 @@ class MultiChoiceQuizView(discord.ui.View):
             self.add_item(btn)
 
     async def process_choice(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # すでに選ばれているボタンをもう一度押した場合は解除
+        # 💡 ここから下は「半差スペース8個分（赤線のさらに右）」に引っ込めて縦ラインを揃えます
+        
+        # 既に2つ選ばれて処理中の場合は何もしない
+        if len(self.selected_buttons) >= 2 and button not in self.selected_buttons:
+            return
+
+        # 🔄 トグル処理：すでに選ばれているボタンをもう一度押したら「選択解除」にする
         if button in self.selected_buttons:
             self.selected_buttons.remove(button)
-            button.style = discord.ButtonStyle.primary  # 元の色（またはお好み）に戻す
+            button.style = discord.ButtonStyle.secondary  # グレーに戻す
         else:
-            # 2度押しでなければ選択リストに追加
+            # 新しく選択されたら青色（Primary）に変える
             self.selected_buttons.append(button)
-            button.style = discord.ButtonStyle.success  # 選択中として緑色にする
-            
-        # 画面上のボタンの見た目を更新
-        await interaction.message.edit(view=self)
+            button.style = discord.ButtonStyle.primary
 
-        # 2つのボタンが選択されたら正誤判定へ
-        if len(self.selected_buttons) == 2:
-            for item in self.children:
-                if isinstance(item, discord.ui.Button):
-                    item.disabled = True
-            await interaction.message.edit(view=self)
+        # 💡 【1つ目のボタンのとき】
+        # interaction.response.defer() の後は、edit_original_response を使うのがDiscordの絶対ルール！
+        if len(self.selected_buttons) < 2:
+            await interaction.edit_original_response(view=self)
+            return
 
-            chosen_labels = [btn.label for btn in self.selected_buttons]
-            user_id = interaction.user.id
-            
-            # 2つの選択肢が、正解リストと完全に一致しているか判定（順不同）
-            is_correct = set(chosen_labels) == set(self.correct_answers)
+        # 🚨 【2つのボタンが揃ったら】正誤判定に突入！
+        # 連打や修正を防ぐためにすべてのボタンを無効化（ロック）
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+                # 正解のボタンは緑色（Success）に、不正解は赤色（Danger）に変えて答え合わせ
+                if item.label in self.correct_answers:
+                    item.style = discord.ButtonStyle.success
+                elif item in self.selected_buttons:
+                    item.style = discord.ButtonStyle.danger
 
-            if is_correct:
-                update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
-                await interaction.channel.send(f"💡 {interaction.user.mention} **正解！お見事です（特別クイズ）！🎉**")
-                await interaction.channel.send(f'<:hint:1556661937356546069> 【解説】\n{self.explanation}')
-            else:
-                update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
-                await interaction.channel.send(f"😢 {interaction.user.mention} **不正解です...。**")
-                correct_text = "、".join([f"【 {ans} 】" for ans in self.correct_answers])
-                await interaction.channel.send(f"正解は {correct_text} の2つでした！")
-                    # 💡 【重要】メッセージを出し終えたので、Botのクイズ解答待ち状態を完全にクリアする
+        # 💡 ここも同様に edit_original_response でボタンの見た目を確定させます
+        await interaction.edit_original_response(view=self)
+
+        user_id = interaction.user.id
+        # ユーザーが選んだ2つの選択肢（テキスト）のリスト
+        user_choices = [btn.label for btn in self.selected_buttons]
+
+        # 💡 順不同で、2つの正解が両方とも含まれているかをチェック
+        is_all_correct = all(ans in user_choices for ans in self.correct_answers)
+
+        if is_all_correct:
+            update_db_score(user_id, interaction.user.display_name, True, interaction.message, member=interaction.user)
+            await interaction.channel.send(f"💡 {interaction.user.mention} **大正解！2つの選択肢を完璧に見抜きました！🎉**")
+            await interaction.channel.send(f'<:hint:1556661937356546069> 【解説】\n{self.explanation}')
+        else:
+            update_db_score(user_id, interaction.user.display_name, False, interaction.message, member=interaction.user)
+            correct_text = " と ".join([f"【{a}】" for a in self.correct_answers])
+            await interaction.channel.send(f"😢 {interaction.user.mention} **残念、不正解です...。**\n正解は {correct_text} でした！")
+        
+        # 💡 【ゾンビ化防止ガード】解き終わったので、Botの解答待ちフラグを完全にNoneにクリアする！
         global current_quiz, current_quiz_junior_high, current_quiz_academic, user_status
         current_quiz = None
         current_quiz_junior_high = None
