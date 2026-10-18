@@ -5,6 +5,7 @@ import sympy as sp
 import json
 import string
 import asyncio
+import requests
 from discord.ext import tasks  # 🌟 インポートはここに綺麗にまとめます
 
 # 全てのインポートが終わった後に、変数を置きます！
@@ -1108,6 +1109,7 @@ async def on_message(message):
         return
     elif message.content == "!ランダムに州を選んで":
         # （中身は右にズレている）
+        await message.channel.send(random.choice(results))
         return
     # 🎰 ハイブリッド型ボタン式ルーレットコマンド
     elif message.content.startswith("!ルーレット"):
