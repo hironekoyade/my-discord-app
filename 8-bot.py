@@ -985,7 +985,7 @@ async def on_message(message):
             name="🎲 その他の機能",
             value=(
                 "• `!一般クイズ` : 一般知識クイズに挑戦\n"
-                "• `!今日の運勢` / `!明日の運勢` : 今日の運勢・明日の運勢を占う!\n"
+                "• `!今日の運勢` / `!明日の運勢` : 🔮 **【1日1回限定】** 今日の運勢・明日の運勢を占う!\n"  # 💡 ここを分かりやすく書き換えました！
                 "• `!サイコロ` : サイコロを振る（例: `!サイコロ 100` / `!サイコロ 6 5`）\n"
                 "• `!ルーレット` : 🎰 **【大人気】ボタン式の本格演出ルーレット！**\n"
                 "  ┗ 💬 自由入力： `!ルーレット 焼肉 寿司 ラーメン` （項目をスペース区切り）\n"
@@ -1000,7 +1000,7 @@ async def on_message(message):
         embed.add_field(
             name="🛠️ 管理者向け機能(実行は管理専用サーバーでしてください)",
             value=("• `!github-repositories` : 開発用GitHubリポジトリのURLを確認する\n"
-                   "• `!supabase-table(quiz_score)` : 全員のクイズの成績を確認する\n"
+                   "• `!supabase-table(quiz_score)` : 全員のクイズの成績・今日の占い/明日の占いを実行したかを確認する\n"
                    "• `!server-rank-toggle` : サーバーのクイズ正解数による役職付与を有効化/無効化\n"
                    "• `!add-quiz-channel` : クイズ用サーバーを選択(このコマンドの実行は選択したいサーバーで行ってください)\n"
                    "• `!remove-quiz-channel` : クイズ用サーバーを削除(このコマンドの実行は選択したいサーバーで行ってください)\n"
@@ -1194,6 +1194,92 @@ async def on_message(message):
         await message.channel.send(embed=embed)
         return
 
+    # ==========================================
+    # 🔮 【Supabase連動】1日1回制限付き：今日の運勢・明日の運勢 占い機能
+    # ==========================================
+    if message.content in ["!今日の運勢", "!明日の運勢"]:
+        user_id = message.author.id
+        day_type = "today" if message.content == "!今日の運勢" else "tomorrow"
+        day_text = "今日" if day_type == "today" else "明日"
+        
+        # 📅 現在の「日本時間の日付（年-月-日）」を取得 (例: 2026-10-19)
+        from datetime import datetime, timezone, timedelta
+        jst = timezone(timedelta(hours=9))  # 日本時間(JST)
+        current_date_str = datetime.now(jst).strftime("%Y-%m-%d")
+
+        # 占い結果用のデータセット
+        fortunes = ["🌟 超大吉", "✨ 大吉", "🎵 中吉", "😊 小吉", "🍀 吉", "💤 末吉", "☔ 凶"]
+        colors = ["赤色", "青色", "黄色", "緑色", "ピンク", "紫色", "オレンジ色", "白色", "黒色", "ゴールド"]
+        items = ["お気に入りのペン", "クイズの参考書", "スマホ", "いつもと違う靴下", "マイボトル", "ハンカチ", "お菓子"]
+        
+        fortune = random.choice(fortunes)
+        color = random.choice(colors)
+        item = random.choice(items)
+        
+        embed = discord.Embed(
+            title=f"🔮 ひろねこ占い（{day_text}の運勢）",
+            description=f"{message.author.mention} さんの{day_text}の運勢を占いました！",
+            color=discord.Color.purple()
+        )
+        embed.add_field(name="✨ 総合運", value=f"**{fortune}**", inline=False)
+        embed.add_field(name="🎨 ラッキーカラー", value=color, inline=True)
+        embed.add_field(name="🎒 ラッキーアイテム", value=item, inline=True)
+        embed.set_footer(text="占いは1日1回のお楽しみ！良い1日になりますように。")
+
+        try:
+            # 1. データベースからユーザーの既存データを取得
+            response = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
+            
+            last_date = None
+            correct_count = 0
+            wrong_count = 0
+            is_rank_enabled = True
+
+            # 💡 [0] をしっかり指定して、クイズの成績データを正しく読み込む
+            if response.data and len(response.data) > 0:
+                user_data = response.data[0]
+                correct_count = user_data.get("correct_count", 0)
+                wrong_count = user_data.get("wrong_count", 0)
+                is_rank_enabled = user_data.get("is_rank_enabled", True)
+                
+                # 今日の運勢か明日の運勢かで、チェックする列を切り替える
+                if day_type == "today":
+                    last_date = user_data.get("last_fortune_date")
+                else:
+                    last_date = user_data.get("last_tomorrow_fortune_date")
+
+            # 2. 制限チェック：もし「最後に占った日付」が「今日の日付」と同じならお断りする
+            if last_date == current_date_str:
+                await message.channel.send(f"⚠️ {message.author.mention} さん、**{day_text}の運勢はすでに占われています！** また明日挑戦してね！")
+                return
+
+            # 3. データを上書き保存（upsert）するための準備
+            update_data = {
+                "user_id": user_id,
+                "username": message.author.display_name,
+                "correct_count": correct_count,
+                "wrong_count": wrong_count,
+                "is_rank_enabled": is_rank_enabled,
+                "updated_at": "now()"
+            }
+            
+            # 占った方の日付列に今日の日付文字列をセット
+            if day_type == "today":
+                update_data["last_fortune_date"] = current_date_str
+            else:
+                update_data["last_tomorrow_fortune_date"] = current_date_str
+
+            # 4. Supabaseへ保存を実行
+            supabase.table("user_scores").upsert(update_data).execute()
+            
+            # 5. 無事に保存できたら占い結果を送信！
+            await message.channel.send(embed=embed)
+
+        except Exception as e:
+            print(f"占いデータベース処理エラー: {e}")
+            # 万が一Supabaseとの通信エラーが起きても、ボットがフリーズしないよう結果だけは出す
+            await message.channel.send(embed=embed)
+        return
     # 💬 8. 定型文・その他挨拶機能（ここへ続く）
     if message.content == "!こんにちは":
         await message.channel.send("こんにちは！")
