@@ -1229,24 +1229,27 @@ async def on_message(message):
         
         try:
             response = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
-            if response.data and len(response.data) > 0:
-                data = response.data[0]  
-                correct = data["correct_count"]
-                wrong = data["wrong_count"]
+            
+            # 💡【大修正】string indices must be integers の原因を解決！
+            # 最新のSupabaseは response.data の中身を安全にリストとして扱います
+            user_data_list = getattr(response, "data", response)
+            
+            if user_data_list and isinstance(user_data_list, list) and len(user_data_list) > 0:
+                data = user_data_list[0]  
+                correct = data.get("correct_count", 0)
+                wrong = data.get("wrong_count", 0)
                 total = correct + wrong
                 rate = (correct / total * 100) if total > 0 else 0
                 
-                # 💡【追加】データベースからオンオフ設定を読み込んで、表示用のテキストを作る
                 is_enabled = data.get("is_rank_enabled", True)
                 status_text = "🟢 受け取る（オン）" if is_enabled else "🔴 受け取らない（オフ）"
                 
-                # 💡 メッセージの一番下に「現在の設定状況」を書き足す
                 await message.channel.send(
                     f"📊 **{message.author.display_name} さんのクイズ成績（クラウド保存）**\n"
                     f"• 正解数: {correct} 回 ⭕\n"
                     f"• 不正解数: {wrong} 回 ❌\n"
                     f"• 正答率: {rate:.1f} %\n"
-                    f"• 役職の自動付与: **{status_text}**" # 👈 ここを追加！
+                    f"• 役職の自動付与: **{status_text}**"
                 )
             else:
                 await message.channel.send(f"📊 {message.author.display_name} さんは、まだクイズに挑戦していません！")
