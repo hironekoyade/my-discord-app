@@ -1158,16 +1158,22 @@ async def on_message(message):
         await message.channel.send("おやすみなさい！")
         return
     elif message.content == "!今日の運勢":
-        results = ["大吉：今日は最高の1日になります！", "吉：良いことあるかも。", "凶：忘れ物に注意。"]
-        await message.channel.send(random.choice(results))
+        # 💡 変数名を「today_fortune」に独立！
+        today_fortune = ["大吉：今日は最高の1日になります！", "吉：良いことあるかも。", "凶：忘れ物に注意。"]
+        await message.channel.send(random.choice(today_fortune))
         return
     elif message.content == "!明日の運勢":
-        results = ["大吉：明日は最高の運勢になります！", "吉：明日は良いことあるかも？", "凶：忘れ物に注意..."]
-        await message.channel.send(random.choice(results))
+        # 💡 変数名を「tomorrow_fortune」に独立！
+        tomorrow_fortune = ["大吉：明日は最高の運勢になります！", "吉：明日は良いことあるかも？", "凶：忘れ物に注意..."]
+        await message.channel.send(random.choice(tomorrow_fortune))
         return
     elif message.content == "!ランダムに州を選んで":
-        # （中身は右にズレている）
-        await message.channel.send(random.choice(results))
+        await message.channel.send("🔮 世界の6大州からランダムに選びます！選ばれたのは...")
+        
+        # 💡 変数名を他のコマンドと完全に分離し、州のリストを正しく作成します
+        world_states = ["オセアニア州！", "アフリカ州！", "アジア州！", "ヨーロッパ州！", "北アメリカ州！", "南アメリカ州！"]
+        
+        await message.channel.send(random.choice(world_states))
         return
     # 🎰 ハイブリッド型ボタン式ルーレットコマンド
     elif message.content.startswith("!ルーレット"):
