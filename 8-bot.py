@@ -451,24 +451,41 @@ if os.path.exists("quiz_dictionary.json"):
     with open("quiz_dictionary.json", "r", encoding="utf-8") as f:
         quiz_dictionary = json.load(f)
 
-def update_db_score(user_id: int, username: str, is_correct: bool, message: discord.Message = None, member: discord.Member = None):
-    """正解・不正解時にクラウドデータベースのカウントを+1し、個人の役職設定をチェックする関数"""
+def update_db_score(
+    user_id: int, 
+    username: str, 
+    is_correct: bool, 
+    message: discord.Message = None, 
+    member: discord.Member = None
+):
     try:
-        response = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
+        response = (
+            supabase.table("user_scores")
+            .select("*")
+            .eq("user_id", user_id)
+            .execute()
+        )
         
-        # ユーザー個人の設定（デフォルトはTrue=オン）
         user_rank_preference = True
+        correct = 1 if is_correct else 0
+        wrong = 0 if is_correct else 1
         
+        # 💡 [0] を指定して1行ずつ正しく読み込みます
         if response.data and len(response.data) > 0:
-            current = response.data[0]
-            correct = current["correct_count"] + (1 if is_correct else 0)
-            wrong = current["wrong_count"] + (0 if is_correct else 1)
-            user_rank_preference = current.get("is_rank_enabled", True)
-        else:
-            correct = 1 if is_correct else 0
-            wrong = 0 if is_correct else 1
+            current = response.data[0] # 👈 ここ！
+            correct = current.get(
+                "correct_count", 0
+            ) + (1 if is_correct else 0)
+            
+            wrong = current.get(
+                "wrong_count", 0
+            ) + (0 if is_correct else 1)
+            
+            user_rank_preference = current.get(
+                "is_rank_enabled", True
+            )
 
-        # データをSupabaseへ保存
+        # データをSupabaseへ保存（upsert）
         supabase.table("user_scores").upsert({
             "user_id": user_id,
             "username": username,
@@ -477,19 +494,17 @@ def update_db_score(user_id: int, username: str, is_correct: bool, message: disc
             "is_rank_enabled": user_rank_preference,
             "updated_at": "now()"
         }).execute()
-        print(f"【システムログ】{username} さんのデータをSupabaseに保存しました。（現在: {correct}問正解）")
 
         # 👑 役職昇進チェック
         if is_correct and message and message.guild and member:
-            # Bot自身（client.user.id）が紛れ込んだ場合は完全に除外する
             if member.id == client.user.id:
                 return
 
-            server_enabled = is_rank_enabled_for_guild(message.guild.id)
+            server_enabled = is_rank_enabled_for_guild(
+                message.guild.id
+            )
             if server_enabled and user_rank_preference:
-                
                 async def assign_rank_role():
-                    # 💡 条件判定をシンプルにし、現在の正確な正解数（correct）でチェック
                     role_name = None
                     if correct >= 120:
                         role_name = "永世博士"
@@ -503,17 +518,26 @@ def update_db_score(user_id: int, username: str, is_correct: bool, message: disc
                         role_name = "見習い学者"
                     
                     if role_name:
-                        role = discord.utils.get(message.guild.roles, name=role_name)
-                        if role:
-                            # 💡 ターゲットを message.author ではなく「member（ボタンを押した人）」に修正
-                            if role not in member.roles:
-                                try:
-                                    await member.add_roles(role)
-                                    await message.channel.send(f"🆙 **【ランクアップ！】** {member.mention} さんの累計正解数が **{correct}問** に達したため、**【{role_name}】** に昇進しました！ 🎉")
-                                except discord.Forbidden:
-                                    await message.channel.send(f"⚠️ 権限エラー: Botの役職順位が低いため、**【{role_name}】** を付与できませんでした。")
-                                except Exception as e:
-                                    print(f"ロール付与失敗: {e}")
+                        role = discord.utils.get(
+                            message.guild.roles, 
+                            name=role_name
+                        )
+                        if role and (role not in member.roles):
+                            try:
+                                await member.add_roles(role)
+                                await message.channel.send(
+                                    f"🆙 **【ランクアップ！】** "
+                                    f"{member.mention} さんの累計正解数が "
+                                    f"**{correct}問** に達したため、"
+                                    f"**【{role_name}】** に昇進しました！ 🎉"
+                                )
+                            except discord.Forbidden:
+                                await message.channel.send(
+                                    f"⚠️ 権限エラー: Botの役職順位が低いため、"
+                                    f"**【{role_name}】** を付与できませんでした。"
+                                )
+                            except Exception as e:
+                                print(f"ロール付与失敗: {e}")
                 
                 client.loop.create_task(assign_rank_role())
 
@@ -1235,15 +1259,15 @@ async def on_message(message):
             is_rank_enabled = True
 
             if response.data and len(response.data) > 0:
-                user_data = response.data[0]
-                correct_count = user_data.get("correct_count", 0)
-                wrong_count = user_data.get("wrong_count", 0)
-                is_rank_enabled = user_data.get("is_rank_enabled", True)
+                current_status = response.data[0].get("is_rank_enabled", True) # 👈 [0]を追加
+                correct_count = response.data[0].get("correct_count", 0)       # 👈 [0]を追加
+                wrong_count = response.data[0].get("wrong_count", 0)           # 👈 [0]を追加
+                is_rank_enabled = response.data[0].get("is_rank_enabled", True)
                 
-                if day_type == "today":
-                    last_date = user_data.get("last_fortune_date")
-                else:
-                    last_date = user_data.get("last_tomorrow_fortune_date")
+            if day_type == "today":
+                last_date = response.data[0].get("last_fortune_date")
+            else:
+                last_date = response.data[0].get("last_tomorrow_fortune_date")
 
             # 2. 制限チェック：【鉄壁のバグ対策】取得した値に今日の日付文字列が含まれているかを検証
             if last_date and (current_date_str in str(last_date)):
