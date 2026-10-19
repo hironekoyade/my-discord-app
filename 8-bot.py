@@ -1177,6 +1177,23 @@ async def on_message(message):
         await message.channel.send("🎰 ボタンを押すとルーレットの抽選が始まります！", view=view)
         return
 
+    # ==========================================
+    # 🌍 【ここを追加！】世界の6大州をランダムに選ぶ機能
+    # ==========================================
+    if message.content == "!ランダムに州を選んで":
+        continents = ["アジア州", "ヨーロッパ州", "アフリカ州", "北アメリカ州", "南アメリカ州", "オセアニア州"]
+        chosen_continent = random.choice(continents)
+        
+        # 🎨 オシャレなEmbed（カード形式）で結果を発表
+        embed = discord.Embed(
+            title="🌍 ランダム州選出 🌍",
+            description=f"抽選の結果、選ばれたのは……\n\n🎯 **【 {chosen_continent} 】** です！",
+            color=discord.Color.blue()
+        )
+        embed.set_footer(text="地理の勉強やクイズの範囲決めに活用してね！")
+        await message.channel.send(embed=embed)
+        return
+
     # 💬 8. 定型文・その他挨拶機能（ここへ続く）
     if message.content == "!こんにちは":
         await message.channel.send("こんにちは！")
