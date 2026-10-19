@@ -139,17 +139,19 @@ async def auto_announce_ranking():
             print(f"定期ランキング発表エラー: {e}")
 
 # ==========================================
-# 📊 状態管理変数
+# 📊 マルチサーバー対応：状態管理システム
 # ==========================================
-current_quiz = None             
-current_quiz_junior_high = None 
-current_quiz_academic = None    # 💡 学術クイズ用の状態管理変数を追加
+# 💡 サーバーごとにクイズの状態を分けて保存する箱
+server_current_quiz = {}             
+server_current_quiz_jh = {} 
+server_current_quiz_academic = {}    
 
-user_status = None 
-selected_grade = None    
-selected_subject = None         
-selected_range = None    
-selected_content = None 
+# 💡 ユーザーごとにメニューの選択状態を分けて保存する箱
+user_status_dict = {} 
+user_selected_grade = {}    
+user_selected_subject = {}         
+user_selected_range = {}    
+user_selected_content = {} 
 
 # 💡【追加】役職自動付与機能のオンオフスイッチ（True=オン、False=オフ）
 is_rank_role_enabled = True  
@@ -247,11 +249,26 @@ class AcademicQuizView(discord.ui.View):
             await interaction.channel.send(f"😢 {interaction.user.mention} **不正解です...。もう一度挑戦してみてください！**")
             await interaction.channel.send(f"正解は **【 {self.correct_answer} 】** でした！")
         # 💡 【重要】メッセージを出し終えたので、Botのクイズ解答待ち状態を完全にクリアする
-        global current_quiz, current_quiz_junior_high, current_quiz_academic, user_status
-        current_quiz = None
-        current_quiz_junior_high = None
-        current_quiz_academic = None
-        user_status = None
+        # 💡 解答待ち状態クリア
+        global server_current_quiz
+        global server_current_quiz_jh
+        global server_current_quiz_academic
+        global user_status_dict
+        
+        g_id = (
+            interaction.guild.id 
+            if interaction.guild else 0
+        )
+        u_id = interaction.user.id
+        
+        if g_id in server_current_quiz: 
+            del server_current_quiz[g_id]
+        if g_id in server_current_quiz_jh: 
+            del server_current_quiz_jh[g_id]
+        if g_id in server_current_quiz_academic: 
+            del server_current_quiz_academic[g_id]
+        if u_id in user_status_dict: 
+            del user_status_dict[u_id]
 
         self.stop()
 
@@ -407,12 +424,26 @@ class MultiChoiceQuizView(discord.ui.View):
             correct_text = " と ".join([f"【{a}】" for a in self.correct_answers])
             await interaction.channel.send(f"😢 {interaction.user.mention} **残念、不正解です...。**\n正解は {correct_text} でした！")
         
-        # 【ゾンビ化防止ガード】解き終わったのでフラグをNoneにクリア
-        global current_quiz, current_quiz_junior_high, current_quiz_academic, user_status
-        current_quiz = None
-        current_quiz_junior_high = None
-        current_quiz_academic = None
-        user_status = None
+        # 💡 解答待ち状態クリア
+        global server_current_quiz
+        global server_current_quiz_jh
+        global server_current_quiz_academic
+        global user_status_dict
+        
+        g_id = (
+            interaction.guild.id 
+            if interaction.guild else 0
+        )
+        u_id = interaction.user.id
+        
+        if g_id in server_current_quiz: 
+            del server_current_quiz[g_id]
+        if g_id in server_current_quiz_jh: 
+            del server_current_quiz_jh[g_id]
+        if g_id in server_current_quiz_academic: 
+            del server_current_quiz_academic[g_id]
+        if u_id in user_status_dict: 
+            del user_status_dict[u_id]
 
         self.stop()
 
@@ -546,22 +577,40 @@ def update_db_score(
 
 @client.event
 async def on_message(message):
-    global current_quiz, current_quiz_junior_high, current_quiz_academic
-    global user_status, selected_grade, selected_subject, selected_range, selected_content
+    # 💡 新しいマルチサーバー用の変数をグローバル宣言
+    global server_current_quiz, server_current_quiz_jh
+    global server_current_quiz_academic, user_status_dict
+    global user_selected_grade, user_selected_subject
+    global user_selected_range, user_selected_content
 
-    # 1. 自分のメッセージや他のBot（Dynoなど）は最初に完全無視
     if message.author.bot:
         return
+
+    # 🆔 判定に使うサーバーIDとユーザーIDを個別に取得
+    guild_id = message.guild.id if message.guild else 0
+    user_id = message.author.id
 
     # 🔑 管理者認証ボタンコマンド
     if message.content == "!admin":
         class AuthButtonView(discord.ui.View):
             def __init__(self):
                 super().__init__(timeout=60.0)
-            @discord.ui.button(label="👑 管理者認証フォームを開く", style=discord.ButtonStyle.primary)
-            async def open_modal(self, button_interaction: discord.Interaction, button: discord.ui.Button):
-                await button_interaction.response.send_modal(AdminAuthModal())
-        await message.channel.send("以下のボタンを押して、パスワードを入力してください！", view=AuthButtonView())
+            @discord.ui.button(
+                label="👑 管理者認証フォームを開く", 
+                style=discord.ButtonStyle.primary
+            )
+            async def open_modal(
+                self, 
+                button_interaction: discord.Interaction, 
+                button: discord.ui.Button
+            ):
+                await button_interaction.response.send_modal(
+                    AdminAuthModal()
+                )
+        await message.channel.send(
+            "以下のボタンを押して、パスワードを入力してください！", 
+            view=AuthButtonView()
+        )
         return
 
     # 🔄 パスワード強制リセットコマンド
@@ -571,153 +620,178 @@ async def on_message(message):
             characters = string.ascii_letters + string.digits
             ADMIN_PASSWORD = "".join(random.choices(characters, k=6))
             try:
-                await message.author.send(f"👑 パスワードを強制リセットしました：【{ADMIN_PASSWORD}】")
-                await message.channel.send("🔄 パスワードをランダムな新しい値に変更しました！（実行者にDM送信済）")
+                await message.author.send(
+                    f"👑 パスワードを強制リセットしました：【{ADMIN_PASSWORD}】"
+                )
+                await message.channel.send(
+                    "🔄 パスワードをランダムな新しい値に変更しました！（実行者にDM送信済）"
+                )
             except discord.Forbidden:
-                await message.channel.send(f"🔄 パスワードを変更しました！")
+                await message.channel.send("🔄 パスワードを変更しました！")
         else:
-            await message.channel.send("❌ エラー：この緊急コマンドはBotの【創設者3人】のみが実行できます。")
+            await message.channel.send(
+                "❌ エラー：この緊急コマンドはBotの【創設者3人】のみが実行できます。"
+            )
         return
 
-    # 🛠️ 【新機能】専用チャンネルの「追加」コマンド（管理者用）
+    # 🛠️ 専用チャンネルの「追加」コマンド
     if message.content == "!add-quiz-channel":
-        is_server_admin = message.author.guild_permissions.administrator if message.guild else False
-        
-        # 💡 固定リストの代入を削除し、既存の ADMIN_USER_ID リストをそのまま参照
+        is_server_admin = (
+            message.author.guild_permissions.administrator 
+            if message.guild else False
+        )
         if (message.author.id in ADMIN_USER_ID) or is_server_admin:
             if message.guild is None:
-                await message.channel.send("❌ このコマンドはサーバー内でのみ実行できます。")
+                await message.channel.send(
+                    "❌ このコマンドはサーバー内でのみ実行できます。"
+                )
                 return
             
             guild_id_str = str(message.guild.id)
             if guild_id_str not in server_settings:
                 server_settings[guild_id_str] = {}
-            
-            # リスト形式で保存する（まだリストがない場合は新しく作る）
             if "quiz_channel_ids" not in server_settings[guild_id_str]:
                 server_settings[guild_id_str]["quiz_channel_ids"] = []
-                
             current_channels = server_settings[guild_id_str]["quiz_channel_ids"]
             
             if message.channel.id in current_channels:
-                await message.channel.send("⚠️ このチャンネルはすでにクイズ専用チャンネルとして登録されています。")
+                await message.channel.send(
+                    "⚠️ このチャンネルはすでにクイズ専用チャンネルとして登録されています。"
+                )
             else:
                 current_channels.append(message.channel.id)
                 save_server_settings()
-                await message.channel.send(f"🎯 **チャンネルを追加しました：** 以降、**{message.channel.mention}** でもクイズ機能が動作します！")
+                await message.channel.send(
+                    f"🎯 **チャンネルを追加しました：** 以降、"
+                    f"**{message.channel.mention}** でもクイズ機能が動作します！"
+                )
         else:
-            await message.channel.send("❌ この設定コマンドは、Botの管理者、またはサーバー管理者のみ実行できます。")
+            await message.channel.send(
+                "❌ この設定コマンドは、Botの管理者、またはサーバー管理者のみ実行できます。"
+            )
         return
 
-    # 🛠️ 【新機能】専用チャンネルの「削除」コマンド（管理者用）
+    # 🛠️ 専用チャンネルの「削除」コマンド
     if message.content == "!remove-quiz-channel":
-        is_server_admin = message.author.guild_permissions.administrator if message.guild else False
-        
-        # 💡 固定リストの代入を削除
+        is_server_admin = (
+            message.author.guild_permissions.administrator 
+            if message.guild else False
+        )
         if (message.author.id in ADMIN_USER_ID) or is_server_admin:
             if message.guild is None:
-                await message.channel.send("❌ このコマンドはサーバー内でのみ実行できます。")
+                await message.channel.send(
+                    "❌ このコマンドはサーバー内でのみ実行できます。"
+                )
                 return
             
             guild_id_str = str(message.guild.id)
-            current_channels = server_settings.get(guild_id_str, {}).get("quiz_channel_ids", [])
+            current_channels = server_settings.get(
+                guild_id_str, {}
+            ).get("quiz_channel_ids", [])
             
             if message.channel.id in current_channels:
                 current_channels.remove(message.channel.id)
                 save_server_settings()
-                await message.channel.send(f"❌ **チャンネルを解除しました：** 以降、**{message.channel.mention}** ではクイズ機能が動作しません。")
+                await message.channel.send(
+                    f"❌ **チャンネルを解除しました：** 以降、"
+                    f"**{message.channel.mention}** ではクイズ機能が動作しません。"
+                )
             else:
-                await message.channel.send("⚠️ このチャンネルはクイズ専用チャンネルとして登録されていません。")
+                await message.channel.send(
+                    "⚠️ このチャンネルはクイズ専用チャンネルとして登録されていません。"
+                )
         else:
-            await message.channel.send("❌ この設定コマンドは、Botの管理者、またはサーバー管理者のみ実行できます。")
+            await message.channel.send(
+                "❌ この設定コマンドは、Botの管理者、またはサーバー管理者のみ実行できます。"
+            )
         return
 
-    # 💡 2. 先頭が「!」のコマンドは、クイズの『解答中』の時だけ判定をスルー
-    if message.content.startswith("!") and message.content not in ["!ストップ", "!stop", "!cancel"]:
-        if current_quiz is None and current_quiz_junior_high is None and current_quiz_academic is None and user_status is None:
+    # 💡 2. クイズ解答中の場合は他の一般「!」コマンドをスルー
+    if (
+        message.content.startswith("!") 
+        and message.content not in ["!ストップ", "!stop", "!cancel"]
+    ):
+        has_quiz = (
+            guild_id in server_current_quiz 
+            or guild_id in server_current_quiz_jh 
+            or guild_id in server_current_quiz_academic 
+            or user_id in user_status_dict
+        )
+        if not has_quiz:
             pass 
         else:
             return  
 
-    # 🎮 7.5. Robloxゲーム内ステータス照会コマンド（追加分）
     elif message.content.startswith("!roblox_score"):
         args = message.content.split()
         if len(args) < 2:
-            await message.channel.send("❌ ユーザー名を指定してください。(例: `!roblox_score PlayerA`)")
+            await message.channel.send(
+                "❌ ユーザー名を指定してください。(例: `!roblox_score PlayerA`)"
+            )
             return
             
         target_player = args[1]
-        await message.channel.send(f"🔍 Robloxから {target_player} さんのデータを照会中...")
-
-        # Roblox Open Cloud DataStore API のURL
+        await message.channel.send(
+            f"🔍 Robloxから {target_player} さんのデータを照会中..."
+        )
         url = f"https://roblox.com{UNIVERSE_ID}/standard-datastores/datastore/entries/entry"
-        
-        headers = {
-            "x-api-key": ROBLOX_API_KEY
-        }
-        params = {
-            "datastoreName": DATASTORE_NAME,
-            "entryKey": target_player
-        }
+        headers = {"x-api-key": ROBLOX_API_KEY}
+        params = {"datastoreName": DATASTORE_NAME, "entryKey": target_player}
 
         try:
-            # 💡 requestsを非同期のBotを邪魔しないように実行（または import requests を一番上で行ってください）
             import requests
             response = requests.get(url, headers=headers, params=params)
             if response.status_code == 200:
                 roblox_data = response.json()
                 score = roblox_data.get("Score", 0)
                 level = roblox_data.get("Level", 1)
-                
                 await message.channel.send(
                     f"🎮 **{target_player} さんのRobloxゲーム内ステータス**\n"
                     f"• 現在のレベル: **Lv.{level}**\n"
                     f"• 獲得スコア: **{score} 点** 🏆"
                 )
             elif response.status_code == 404:
-                await message.channel.send(f"⚠️ {target_player} さんのデータはゲーム内に見つかりませんでした。")
+                await message.channel.send(
+                    f"⚠️ {target_player} さんのデータはゲーム内に見つかりませんでした。"
+                )
             else:
                 await message.channel.send("❌ Roblox APIとの通信に失敗しました。")
         except Exception as e:
             print(f"Robloxデータ取得エラー: {e}")
             await message.channel.send("❌ エラーが発生しました。")
         return
-    # 🚧 【鉄壁のガード：指定チャンネル完全限定版】
-    # 管理者用コマンド以外のすべての一般コマンド・機能を、登録された専用部屋だけでしか動かないように一括制限します！
-    
-    # 🔑 1. どこでも実行できてほしい「管理者用・設定用コマンド」をリストアップして除外する
+
+    # 🚧 専用チャンネルのガード処理
     is_admin_command = message.content in [
         "!admin", "!password-reset", "!github-repositories", 
         "!supabase-table(quiz_score)", "!rank-toggle", 
         "!add-quiz-channel", "!remove-quiz-channel"
     ]
-
-    # 🔑 2. 先頭に「!」がついている一般コマンド、またはクイズ解答中の場合を制限対象にする
     is_general_command = message.content.startswith("!") and (not is_admin_command)
-    is_currently_answering = (current_quiz is not None) or (user_status in ["quiz_active", "academic_quiz_active", "select_grade", "select_subject", "select_range", "select_content"])
+    is_currently_answering = (
+        guild_id in server_current_quiz 
+        or guild_id in server_current_quiz_jh 
+        or guild_id in server_current_quiz_academic
+        or user_id in user_status_dict
+    )
 
-    # 💡 サーバー（Guild）内で、一般コマンドが打たれたかクイズ中のときだけチェックを実行
     if message.guild and (is_general_command or is_currently_answering):
         guild_id_str = str(message.guild.id)
-        target_channel_ids = server_settings.get(guild_id_str, {}).get("quiz_channel_ids", [])
-        
-        # 専用チャンネルが1つ以上登録されている場合のみガードを発動
+        target_channel_ids = server_settings.get(
+            guild_id_str, {}
+        ).get("quiz_channel_ids", [])
         if target_channel_ids:
-            # 今発言されたチャンネルが、登録されている専用部屋リストに「含まれていない」場合は即座に終了（無視）
             if message.channel.id not in target_channel_ids:
                 return 
 
     # ==========================================
-    # 🎯 クイズの解答判定エリア（出題中のみ実行するように厳格化）
+    # 🎯 クイズの解答判定エリア
     # ==========================================
 
     # 1. 一般知識クイズの解答判定
-    if current_quiz is not None:
-        # メッセージ送信者がBot自身、または他のBot（Dynoなど）の場合は完全に無視する
-        if message.author.bot:
-            return
-
-        quiz_data = quiz_dictionary[current_quiz]
+    if guild_id in server_current_quiz:
+        quiz_key = server_current_quiz[guild_id]
+        quiz_data = quiz_dictionary[quiz_key]
         is_correct = False
         if isinstance(quiz_data["answer"], list):
             if message.content in quiz_data["answer"]:
@@ -726,24 +800,41 @@ async def on_message(message):
             if message.content == quiz_data["answer"]:
                 is_correct = True
 
-        user_id = message.author.id
         if is_correct:
-            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
-            await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です（一般知識）！🎉")
-            await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data["explanation"]}')
-            current_quiz = None  
+            update_db_score(
+                user_id, message.author.display_name, 
+                is_correct, message, member=message.author
+            )
+            await message.channel.send(
+                "<a:marugame:1556977377601527920> "
+                "正解！お見事です（一般知識）！🎉"
+            )
+            await message.channel.send(
+                f'<:hint:1556661937356546069> 【解説】\n'
+                f'{quiz_data["explanation"]}'
+            )
+            del server_current_quiz[guild_id]
         else:
-            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
-            await message.channel.send("不正解です。<:oh_no:1556661209116184686> もう一度挑戦してみてください！")
-            await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
+            update_db_score(
+                user_id, message.author.display_name, 
+                is_correct, message, member=message.author
+            )
+            await message.channel.send(
+                "不正解です。<:oh_no:1556661209116184686> "
+                "もう一度挑戦してみてください！"
+            )
+            await message.channel.send(
+                f'<:hint:1556661937356546069> 【ヒント】\n'
+                f'{quiz_data["hint"]}'
+            )
         return
 
-    # 2. 学術クイズ（テキスト入力形式）の解答判定
-    elif user_status == "academic_quiz_active" and current_quiz_academic is not None:
-        if message.author.bot:
-            return
-
-        quiz_data = current_quiz_academic
+    # 2. 学術クイズ（テキスト形式）の解答判定
+    elif (
+        user_status_dict.get(user_id) == "academic_quiz_active" 
+        and guild_id in server_current_quiz_academic
+    ):
+        quiz_data = server_current_quiz_academic[guild_id]
         is_correct = False
         if isinstance(quiz_data["answer"], list):
             if message.content in quiz_data["answer"]:
@@ -752,26 +843,44 @@ async def on_message(message):
             if message.content == quiz_data["answer"]:
                 is_correct = True
 
-        user_id = message.author.id
         if is_correct:
-            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
-            await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です！🎉📚")
-            await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data["explanation"]}')
-            current_quiz_academic = None  
-            user_status = None
+            update_db_score(
+                user_id, message.author.display_name, 
+                is_correct, message, member=message.author
+            )
+            await message.channel.send(
+                "<a:marugame:1556977377601527920> "
+                "正解！お見事です！🎉📚"
+            )
+            await message.channel.send(
+                f'<:hint:1556661937356546069> 【解説】\n'
+                f'{quiz_data["explanation"]}'
+            )
+            del server_current_quiz_academic[guild_id]  
+            if user_id in user_status_dict:
+                del user_status_dict[user_id]
         else:
-            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
-            await message.channel.send("不正解です😢...<:oh_no:1556661209116184686> もう一度挑戦してみてください！")
-            await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data["hint"]}')
+            update_db_score(
+                user_id, message.author.display_name, 
+                is_correct, message, member=message.author
+            )
+            await message.channel.send(
+                "不正解です😢...<:oh_no:1556661209116184686> "
+                "もう一度挑戦してみてください！"
+            )
+            await message.channel.send(
+                f'<:hint:1556661937356546069> 【ヒント】\n'
+                f'{quiz_data["hint"]}'
+            )
         return
 
     # 3. 中学クイズの解答判定
-    elif user_status == "quiz_active" and current_quiz_junior_high is not None:
-        if message.author.bot:
-            return
-
+    elif (
+        user_status_dict.get(user_id) == "quiz_active" 
+        and guild_id in server_current_quiz_jh
+    ):
         is_correct = False
-        quiz_data = current_quiz_junior_high
+        quiz_data = server_current_quiz_jh[guild_id]
         if isinstance(quiz_data["answer"], list):
             if message.content in quiz_data["answer"]:
                 is_correct = True
@@ -779,169 +888,237 @@ async def on_message(message):
             if message.content == quiz_data["answer"]:
                 is_correct = True
 
-        user_id = message.author.id
         if is_correct:
-            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
-            await message.channel.send("<a:marugame:1556977377601527920> ⭕ 正解！お見事です！ 🎉")
-            await message.channel.send(f'💡 【解説】 \n{quiz_data["explanation"]}')
-            current_quiz_junior_high = None  
-            user_status = None  
+            update_db_score(
+                user_id, message.author.display_name, 
+                is_correct, message, member=message.author
+            )
+            await message.channel.send(
+                "<a:marugame:1556977377601527920> ⭕ 正解！お見事です！ 🎉"
+            )
+            await message.channel.send(
+                f'💡 【解説】 \n{quiz_data["explanation"]}'
+            )
+            del server_current_quiz_jh[guild_id]  
+            if user_id in user_status_dict:
+                del user_status_dict[user_id]  
         else:
-            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
-            await message.channel.send(" 不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！")
-            await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】 \n{quiz_data["hint"]}')
+            update_db_score(
+                user_id, message.author.display_name, 
+                is_correct, message, member=message.author
+            )
+            await message.channel.send(
+                " 不正解です... <:oh_no:1556661209116184686> "
+                "もう一度挑戦してみてください！"
+            )
+            await message.channel.send(
+                f'<:hint:1556661937356546069> 【ヒント】 \n'
+                f'{quiz_data["hint"]}'
+            )
         return
 
-    # 🛑 1. 中断コマンド
-    # 💡 クイズではない独立したコマンド判定なので、クイズ判定の「外側（一番後ろ）」へ安全に退避させました
+    # 🛑 中断コマンド
     if message.content in ["!ストップ", "!stop", "!cancel"]:
-        user_status = None
-        current_quiz = None
-        current_quiz_junior_high = None
-        current_quiz_academic = None
-        selected_grade = None    
-        selected_subject = None
-        selected_range = None    
-        selected_content = None  
-        await message.channel.send("🛑 クイズ・メニュー選択を中断してリセットしました！")
+        if guild_id in server_current_quiz: 
+            del server_current_quiz[guild_id]
+        if guild_id in server_current_quiz_jh: 
+            del server_current_quiz_jh[guild_id]
+        if guild_id in server_current_quiz_academic: 
+            del server_current_quiz_academic[guild_id]
+        
+        if user_id in user_status_dict: 
+            del user_status_dict[user_id]
+        if user_id in user_selected_grade: 
+            del user_selected_grade[user_id]
+        if user_id in user_selected_subject: 
+            del user_selected_subject[user_id]
+        if user_id in user_selected_range: 
+            del user_selected_range[user_id]
+        if user_id in user_selected_content: 
+            del user_selected_content[user_id]
+        await message.channel.send(
+            "🛑 クイズ・メニュー選択を中断してリセットしました！"
+        )
         return
     
     # 📋 4. 中学クイズ：段階的メニュー選択処理
-    if user_status == "select_grade":
+    current_user_status = user_status_dict.get(user_id)
+
+    if current_user_status == "select_grade":
         grade = message.content.strip()
         if grade in quiz_junior_high_school:
-            selected_grade = grade
-            user_status = "select_subject"
-            subjects = list(quiz_junior_high_school[selected_grade].keys())
+            user_selected_grade[user_id] = grade
+            user_status_dict[user_id] = "select_subject"
+            subjects = list(quiz_junior_high_school[grade].keys())
             subjects_text = "・".join(subjects)
             await message.channel.send(
-                f"📂 **{selected_grade}** が選択されました。\n"
+                f"📂 **{grade}** が選択されました。\n"
                 f"**どの教科にしますか？**\n"
                 f"{subjects_text} の中から選んでください。"
             )
         else:
-            await message.channel.send(f"⚠️ 正しい学年を入力してください。")
+            await message.channel.send("⚠️ 正しい学年を入力してください。")
         return
 
-    if user_status == "select_subject":
+    if current_user_status == "select_subject":
         subject = message.content.strip()
-        available_subjects = quiz_junior_high_school[selected_grade]
+        s_grade = user_selected_grade.get(user_id)
+        available_subjects = quiz_junior_high_school[s_grade]
         if subject in available_subjects:
-            selected_subject = subject
-            user_status = "select_range"
-            ranges = list(available_subjects[selected_subject].keys())
+            user_selected_subject[user_id] = subject
+            user_status_dict[user_id] = "select_range"
+            ranges = list(available_subjects[subject].keys())
             ranges_text = "・".join(ranges)
             await message.channel.send(
-                f"📂 {selected_grade} ➔ **{selected_subject}** が選択されました。\n"
+                f"📂 {s_grade} ➔ **{subject}** が選択されました。\n"
                 f"**どの分野にしますか？**\n"
                 f"{ranges_text} の中から選んでください。"
             )
         else:
-            await message.channel.send(f"⚠️ 正しい教科を入力してください。")
+            await message.channel.send("⚠️ 正しい教科を入力してください。")
         return
 
-    if user_status == "select_range":
+    if current_user_status == "select_range":
         range_name = message.content.strip()
-        available_ranges = quiz_junior_high_school[selected_grade][selected_subject]
+        s_grade = user_selected_grade.get(user_id)
+        s_subject = user_selected_subject.get(user_id)
+        available_ranges = quiz_junior_high_school[s_grade][s_subject]
         if range_name in available_ranges:
-            selected_range = range_name
-            user_status = "select_content"
-            contents = list(available_ranges[selected_range].keys())
+            user_selected_range[user_id] = range_name
+            user_status_dict[user_id] = "select_content"
+            contents = list(available_ranges[range_name].keys())
             contents_text = "・".join(contents)
             await message.channel.send(
-                f"📂 {selected_grade} ➔ {selected_subject} ➔ **{selected_range}** が選択されました。\n"
-                f"**どの単元にしますか？**\n"
+                f"📂 {s_grade} ➔ {s_subject} ➔ **{range_name}** "
+                f"が選択されました。\n**どの単元にしますか？**\n"
                 f"{contents_text} の中から選んでください。"
             )
         else:
-            await message.channel.send(f"⚠️ 正しい分野を入力してください。")
+            await message.channel.send("⚠️ 正しい分野を入力してください。")
         return
 
-    if user_status == "select_content":
+    if current_user_status == "select_content":
         content_name = message.content.strip()
-        available_contents = quiz_junior_high_school[selected_grade][selected_subject][selected_range]
+        s_grade = user_selected_grade.get(user_id)
+        s_subject = user_selected_subject.get(user_id)
+        s_range = user_selected_range.get(user_id)
+        available_contents = (
+            quiz_junior_high_school[s_grade][s_subject][s_range]
+        )
         if content_name in available_contents:
-            selected_content = content_name
-            questions = available_contents[selected_content]
+            user_selected_content[user_id] = content_name
+            questions = available_contents[content_name]
             if not questions:
-                await message.channel.send("❌ この単元にはまだ問題が登録されていません。選択をリセットします。")
-                user_status = None
+                await message.channel.send(
+                    "❌ この単元にはまだ問題が登録されていません。"
+                    "選択をリセットします。"
+                )
+                if user_id in user_status_dict: 
+                    del user_status_dict[user_id]
                 return
                 
             q_text = random.choice(list(questions.keys()))
-            current_quiz_junior_high = questions[q_text]
-            user_status = "quiz_active"
+            server_current_quiz_jh[guild_id] = questions[q_text]
+            user_status_dict[user_id] = "quiz_active"
             await message.channel.send(
-                f"🎯 出題範囲：{selected_grade} ➔ {selected_subject} ➔ {selected_range} ➔ {selected_content}\n\n"
-                f"**問題：{q_text}**"
+                f"🎯 出題範囲：{s_grade} ➔ {s_subject} ➔ "
+                f"{s_range} ➔ {content_name}\n\n**問題：{q_text}**"
             )
         else:
-            await message.channel.send(f"⚠️ 正しい単元を入力してください。")
+            await message.channel.send("⚠️ 正しい単元を入力してください。")
         return
 
     # 🚀 5. コマンド受付
-    # 🚀 学術特化クイズコマンド
     if message.content == "!学術クイズ":
         all_academic_q = []
-        for category, questions in quiz_academic.items():
-            for q_text, q_data in questions.items():
-                all_academic_q.append({"text": q_text, "data": q_data, "category": category})
+        for cat, qs in quiz_academic.items():
+            for q_t, q_d in qs.items():
+                all_academic_q.append({
+                    "text": q_t, 
+                    "data": q_d, 
+                    "category": cat
+                })
         
         chosen = random.choice(all_academic_q)
         q_text = chosen["text"]
         q_data = chosen["data"]
         
-        # 💡 データの種類に応じてビューを切り替える
         if q_data["type"] == "choice":
-            view = AcademicQuizView(q_data["answer"], q_data["explanation"], q_data["options"])
-            # 「学術クイズ」という固定文字を、JSONのカテゴリ名（ chosen['category'] ）に動的変更！
-            await message.channel.send(f"🎯 **【クイズ - {chosen['category']}】**（4択ボタン形式）\n\n**問題：{q_text}**", view=view)
-            return
-
-
-        elif q_data["type"] == "multi_choice":
-            view = MultiChoiceQuizView(q_data["answer"], q_data["explanation"], q_data["options"])
-            # ここもどんなジャンル（ゲーム、地理、アニメ等）でもマッチする表記に修正！
+            view = AcademicQuizView(
+                q_data["answer"], 
+                q_data["explanation"], 
+                q_data["options"]
+            )
+            # 💡 4択ボタン形式の出題
             await message.channel.send(
-                f"🔥 **【特別クイズ - {chosen['category']}】**（5択・2つ選択形式）\n\n"
+                f"🎯 **【クイズ - {chosen['category']}】**"
+                f"（4択ボタン形式）\n\n**問題：{q_text}**", 
+                view=view
+            )
+            return
+            
+        elif q_data["type"] == "multi_choice":
+            view = MultiChoiceQuizView(
+                q_data["answer"], 
+                q_data["explanation"], 
+                q_data["options"]
+            )
+            await message.channel.send(
+                f"🔥 **【特別クイズ - {chosen['category']}】**"
+                f"（5択・2つ選択形式）\n\n"
                 f"**問題：{q_text}**\n\n"
-                f"⚠️ **【ルール】正しいと思う選択肢のボタンを【2つ】押してください！**", 
+                f"⚠️ **【ルール】正しいと思う選択肢の"
+                f"ボタンを【2つ】押してください！**", 
                 view=view
             )
             return
 
-
     if message.content == "!中学クイズ":
-        user_status = "select_grade"
-        grade_text = "・".join(quiz_junior_high_school.keys())
-        await message.channel.send(f"**何年生のクイズにしますか？**\n{grade_text}の中から選んでください。")
+        user_status_dict[user_id] = "select_grade"
+        g_text = "・".join(
+            quiz_junior_high_school.keys()
+        )
+        await message.channel.send(
+            f"**何年生のクイズにしますか？**\n"
+            f"{g_text} の中から選んでください。"
+        )
         return
 
     if message.content == "!中学クイズおまかせ":
         all_questions = []
-        for grade, subjects in quiz_junior_high_school.items():
-            for subject, ranges in subjects.items():
-                for range_name, contents in ranges.items():
-                    for content_name, questions in contents.items():
-                        for q_text, q_data in questions.items():
+        for gd, sbs in quiz_junior_high_school.items():
+            for sb, rgs in sbs.items():
+                for rg, cts in rgs.items():
+                    for ct, qs in cts.items():
+                        for q_t, q_d in qs.items():
                             all_questions.append({
-                                "text": q_text,
-                                "data": q_data,
-                                "info": f"【{grade} ➔ {subject} ➔ {range_name} ➔ {content_name}】"
+                                "text": q_t,
+                                "data": q_d,
+                                "info": f"【{gd}➔{sb}➔{rg}➔{ct}】"
                             })
         if not all_questions:
-            await message.channel.send("❌ 現在、中学生用のクイズが1問も登録されていません。")
+            await message.channel.send(
+                "❌ クイズが1問も登録されていません。"
+            )
             return
         chosen = random.choice(all_questions)
-        current_quiz_junior_high = chosen["data"]
-        user_status = "quiz_active"  
-        await message.channel.send(f"🎲 すべての範囲からランダムに問題を出します！\n💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**")
+        server_current_quiz_jh[guild_id] = chosen["data"]
+        user_status_dict[user_id] = "quiz_active"  
+        await message.channel.send(
+            f"🎲 すべての範囲からランダムに出題します！\n"
+            f"💡 出題範囲：{chosen['info']}\n\n"
+            f"**問題：{chosen['text']}**"
+        )
         return
 
     if message.content == "!一般クイズ":
-        await message.channel.send("【一般知識クイズ】を出します！")
-        chosen_quiz = random.choice(list(quiz_dictionary.keys()))
-        current_quiz = chosen_quiz
+        await message.channel.send(
+            "【一般知識クイズ】を出します！"
+        )
+        chosen_quiz = random.choice(
+            list(quiz_dictionary.keys())
+        )
+        server_current_quiz[guild_id] = chosen_quiz
         await message.channel.send(chosen_quiz)
         return
 
