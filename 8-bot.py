@@ -1144,7 +1144,7 @@ async def on_message(message):
             await message.channel.send(f"🎲 1 〜 {max_value} のサイコロを **{dice_count} 個** 振りました！\n内訳: {details}\n合計は **【 {total} 】** です！")
         return
 
-    # 💬 8. 定型文・その他挨拶機能
+    # 💬 8. 定型文・その他挨拶機能（重複を排除した決定版）
     if message.content == "!こんにちは":
         await message.channel.send("こんにちは！")
         return
@@ -1157,93 +1157,20 @@ async def on_message(message):
     elif message.content == "!おやすみ":
         await message.channel.send("おやすみなさい！")
         return
-    elif message.content == "!今日の運勢":
-        # 💡 変数名を「today_fortune」に独立！
-        today_fortune = ["大吉：今日は最高の1日になります！", "吉：良いことあるかも。", "凶：忘れ物に注意。"]
-        await message.channel.send(random.choice(today_fortune))
-        return
-    elif message.content == "!明日の運勢":
-        # 💡 変数名を「tomorrow_fortune」に独立！
-        tomorrow_fortune = ["大吉：明日は最高の運勢になります！", "吉：明日は良いことあるかも？", "凶：忘れ物に注意..."]
-        await message.channel.send(random.choice(tomorrow_fortune))
-        return
-    elif message.content == "!ランダムに州を選んで":
-        await message.channel.send("🔮 世界の6大州からランダムに選びます！選ばれたのは...")
-        
-        # 💡 変数名を他のコマンドと完全に分離し、州のリストを正しく作成します
-        world_states = ["オセアニア州！", "アフリカ州！", "アジア州！", "ヨーロッパ州！", "北アメリカ州！", "南アメリカ州！"]
-        
-        await message.channel.send(random.choice(world_states))
-        return
-    # 🎰 ハイブリッド型ボタン式ルーレットコマンド
-    elif message.content.startswith("!ルーレット"):
-        args = message.content.split()
-        options = []
 
-        # 💡 【モード1：既定の数値モード】
-        # !ルーレット 100 のように、数字が1つだけ入力された場合
-        if len(args) == 2 and args[1].isdigit():
-            max_value = int(args[1])
-            if max_value < 2:
-                await message.channel.send("❌ ルーレットの最大値は 2 以上の数字を指定してください。")
-                return
-            # 1 から指定された数字までのリストを自動生成する（例: 1〜100）
-            options = [str(i) for i in range(1, max_value + 1)]
-            mode_text = f"🔢 **既定数値モード（1 〜 {max_value}）**"
-
-        # 💡 【モード2：みんなが入力する自由形式モード】
-        # !ルーレット 焼肉 寿司 ラーメン のように、項目がスペース区切りで複数ある場合
-        elif len(args) >= 2:
-            options = args[1:]
-            mode_text = "💬 **みんなの自由入力モード**"
-
-        # 💡 【使い方の説明】 
-        # ただ「!ルーレット」とだけ打たれた場合
-        else:
-            await message.channel.send(
-                "🎰 **ルーレット機能の使い方** 🎰\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                "💬 **① 自由入力モード（みんなで決める）**\n"
-                " ➔ `!ルーレット 焼肉 寿司 ラーメン` (スペースで区切る)\n\n"
-                "🔢 **② 既定数値モード（数字を選ぶ）**\n"
-                " ➔ `!ルーレット 100` (1〜100の中からランダム抽選)"
-            )
-            return
-
-        # 🎰 ボタン付きのビューを作成して送信
-        view = RouletteView(options)
-        
-        # 候補が多すぎる（数字が100個ある等）とチャットが見づらくなるため、最初の15個だけ表示
-        display_options = options[:15]
-        footer_text = ", ".join([f"「{o}」" for o in display_options])
-        if len(options) > 15:
-            footer_text += f" ...他 {len(options) - 15} 個"
-
-        await message.channel.send(
-            f"🎲 **ルーレットがセットされました！**（{mode_text}）\n"
-            f"📋 **候補：** {footer_text}\n"
-            f"準備ができたら、下のボタンを押してスタートしてね！👇", 
-            view=view
-        )
-        return
-    # 🟢 ここは揃えたのでこのままでOK！
+    # 🟢 役職自動昇進のオンオフコマンド（インデントを完璧に修正）
     elif message.content == "!server-rank-toggle":
-        # 🌟 ここから下の処理は、もう一度右に1マス（Tab）ずらして中に入れる！
         if message.guild is None:
             await message.channel.send("❌ このコマンドはサーバー内でのみ実行できます。")
             return
 
-        # 💡 開発者リストに入っているか、または「そのサーバーの管理者権限」を持っているかチェック
         is_server_admin = message.author.guild_permissions.administrator
         if (message.author.id in ADMIN_USER_ID) or is_server_admin:
-            
             guild_id_str = str(message.guild.id)
             
-            # 現在の状態を取得して反転させる
             current_status = is_rank_enabled_for_guild(message.guild.id)
             next_status = not current_status
             
-            # サーバーごとの辞書を更新して保存
             if guild_id_str not in server_settings:
                 server_settings[guild_id_str] = {}
             server_settings[guild_id_str]["rank_role_enabled"] = next_status
@@ -1254,6 +1181,8 @@ async def on_message(message):
         else:
             await message.channel.send("❌ この設定コマンドは、Botの管理者、またはこのサーバーの管理者権限（Administrator）を持つ人のみ実行できます。")
         return
+
+    # 🎖️ クイズのランク条件表示コマンド
     elif message.content == "!ランク条件":
         embed = discord.Embed(
             title="🎖️ クイズ役職・昇進条件一覧",
@@ -1266,18 +1195,15 @@ async def on_message(message):
         embed.add_field(name="⚔️ クイズ達人", value="累計 **30問** 正解", inline=False)
         embed.add_field(name="📝 見習い学者", value="累計 **10問** 正解", inline=False)
         embed.set_footer(text="現在の自分のスコアは !quiz_score で確認できるよ！")
-        
         await message.channel.send(embed=embed)
         return
-    # 👤【一般ユーザー用】自分自身の役職自動付与をオンオフするコマンド
+
+    # 👤 個人用の役職付与オンオフ切り替えコマンド
     elif message.content == "!myrank-toggle":
         user_id = message.author.id
-        
         try:
-            # データベースから現在の設定を取得
             response = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
-            
-            current_status = True  # デフォルト値
+            current_status = True  
             correct_count = 0
             wrong_count = 0
             
@@ -1286,10 +1212,8 @@ async def on_message(message):
                 correct_count = response.data[0].get("correct_count", 0)
                 wrong_count = response.data[0].get("wrong_count", 0)
             
-            # 状態を反転させる
             next_status = not current_status
             
-            # データベースを即座に更新
             supabase.table("user_scores").upsert({
                 "user_id": user_id,
                 "username": message.author.display_name,
@@ -1301,7 +1225,6 @@ async def on_message(message):
             
             status_text = "【🟢受け取る（オン）】" if next_status else "【🔴受け取らない（オフ）】"
             await message.channel.send(f"👤 {message.author.mention} さん、あなたのクイズ役職自動付与設定を **{status_text}** に変更しました。")
-            
         except Exception as e:
             await message.channel.send("❌ 設定の変更中にエラーが発生しました。")
             print(f"個人設定切り替えエラー: {e}")
