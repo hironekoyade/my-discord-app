@@ -1260,7 +1260,7 @@ async def on_message(message):
     if message.content == "!github-repositories":
         # 💡 固定リストの代入を削除
         if message.author.id in ADMIN_USER_ID:
-            await message.channel.send("リポジトリです。https://github.com")
+            await message.channel.send("リポジトリです。https://github.com/hironekoyade/my-discord-app")
         else:
             await message.channel.send("❌ このコマンドはBotの管理者のみが実行できます。")
         return
