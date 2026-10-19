@@ -1492,6 +1492,7 @@ async def on_message(message):
 
         try:
             # 1. データベースからユーザーのデータを取得
+            # 💡 execute() の戻り値（res）の仕様変更に対応します
             res = (
                 supabase.table("user_scores")
                 .select("*")
@@ -1504,9 +1505,13 @@ async def on_message(message):
             wrong_count = 0
             is_rank_enabled = True
 
-            # 💡 データがある時だけ [0] を安全に取得
-            if res.data and len(res.data) > 0:
-                user_data = res.data[0]
+            # 💡 現在のSupabase SDKでは、res.data ではなく res 自体にリストが入る、
+            # もしくは res.data が存在しない（または文字列）ケースがあるため、安全にチェックします
+            # 一般的な最新のSDK仕様に合わせた安全なデータ取得方法：
+            user_data_list = getattr(res, "data", res)
+
+            if user_data_list and isinstance(user_data_list, list) and len(user_data_list) > 0:
+                user_data = user_data_list[0]
                 
                 correct_count = user_data.get("correct_count", 0)
                 wrong_count = user_data.get("wrong_count", 0)
@@ -1517,11 +1522,10 @@ async def on_message(message):
                 else:
                     last_date = user_data.get("last_tomorrow_fortune_date")
             else:
-                # 💡 データがなかった場合（新規ユーザーなど）は、初期値のまま進む
+                # データがなかった場合（新規ユーザーなど）は初期値のまま進む
                 pass
 
             # 2. 制限チェック
-            # 💡 完全一致 (==) で比較する方が、予期せぬ部分一致によるバグを防げて安全です
             if last_date and (str(last_date) == current_date_str):
                 await message.channel.send(
                     f"⚠️ {message.author.mention} さん、"
