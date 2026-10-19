@@ -1202,10 +1202,9 @@ async def on_message(message):
         day_type = "today" if message.content == "!今日の運勢" else "tomorrow"
         day_text = "今日" if day_type == "today" else "明日"
         
-        # 📅 現在の「日本時間の日付（年-月-日）」を取得 (例: 2026-10-19)
-        from datetime import datetime, timezone, timedelta
-        jst = timezone(timedelta(hours=9))  # 日本時間(JST)
-        current_date_str = datetime.now(jst).strftime("%Y-%m-%d")
+        # 📅 【バグ対策版】確実に日本時間の日付文字列（年-月-日）を生成する
+        import datetime
+        current_date_str = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).strftime("%Y-%m-%d")
 
         # 占い結果用のデータセット
         fortunes = ["🌟 超大吉", "✨ 大吉", "🎵 中吉", "😊 小吉", "🍀 吉", "💤 末吉", "☔ 凶"]
@@ -1235,21 +1234,19 @@ async def on_message(message):
             wrong_count = 0
             is_rank_enabled = True
 
-            # 💡 [0] をしっかり指定して、クイズの成績データを正しく読み込む
             if response.data and len(response.data) > 0:
                 user_data = response.data[0]
                 correct_count = user_data.get("correct_count", 0)
                 wrong_count = user_data.get("wrong_count", 0)
                 is_rank_enabled = user_data.get("is_rank_enabled", True)
                 
-                # 今日の運勢か明日の運勢かで、チェックする列を切り替える
                 if day_type == "today":
                     last_date = user_data.get("last_fortune_date")
                 else:
                     last_date = user_data.get("last_tomorrow_fortune_date")
 
-            # 2. 制限チェック：もし「最後に占った日付」が「今日の日付」と同じならお断りする
-            if last_date == current_date_str:
+            # 2. 制限チェック：【鉄壁のバグ対策】取得した値に今日の日付文字列が含まれているかを検証
+            if last_date and (current_date_str in str(last_date)):
                 await message.channel.send(f"⚠️ {message.author.mention} さん、**{day_text}の運勢はすでに占われています！** また明日挑戦してね！")
                 return
 
@@ -1263,7 +1260,6 @@ async def on_message(message):
                 "updated_at": "now()"
             }
             
-            # 占った方の日付列に今日の日付文字列をセット
             if day_type == "today":
                 update_data["last_fortune_date"] = current_date_str
             else:
@@ -1277,8 +1273,8 @@ async def on_message(message):
 
         except Exception as e:
             print(f"占いデータベース処理エラー: {e}")
-            # 万が一Supabaseとの通信エラーが起きても、ボットがフリーズしないよう結果だけは出す
-            await message.channel.send(embed=embed)
+            # エラー時にお友達に連打されるのを防ぐため、安全装置を「お詫びメッセージ」に変更
+            await message.channel.send("❌ データベースとの通信でエラーが発生したため、現在占いを制限しています。少し時間を置いてお試しください。")
         return
     # 💬 8. 定型文・その他挨拶機能（ここへ続く）
     if message.content == "!こんにちは":
