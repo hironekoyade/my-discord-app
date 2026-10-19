@@ -1505,15 +1505,16 @@ async def on_message(message):
 
             # 💡 データが存在するときだけ安全に中身を読み込む
             if response.data and len(response.data) > 0:
+                # 💡 末尾に [0] をつけて、1番目のデータを確実に指定します
                 user_data = response.data[0]
                 correct_count = user_data.get("correct_count", 0)
                 wrong_count = user_data.get("wrong_count", 0)
                 is_rank_enabled = user_data.get("is_rank_enabled", True)
                 
-                if day_type == "today":
-                    last_date = user_data.get("last_fortune_date")
-                else:
-                    last_date = user_data.get("last_tomorrow_fortune_date")
+            if day_type == "today":
+                last_date = user_data.get("last_fortune_date")
+            else:
+                last_date = user_data.get("last_tomorrow_fortune_date")
 
             if last_date and (current_date_str in str(last_date)):
                 await message.channel.send(
