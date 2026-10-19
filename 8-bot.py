@@ -10,7 +10,10 @@ from discord.ext import tasks  # 🌟 インポートはここに綺麗にまと
 
 # 全てのインポートが終わった後に、変数を置きます！
 user_scores = {}
-
+# ==========================================
+ROBLOX_API_KEY = os.getenv("ROBLOX_API_KEY", "あなたの実際のAPIキー、または.envから読み込み")
+UNIVERSE_ID = "あなたのゲームのUNIVERSE_ID"
+DATASTORE_NAME = "GameScores"
 
 # ==========================================
 # 🔑 管理者パスワード管理（複合システム版）
@@ -612,18 +615,73 @@ async def on_message(message):
         else:
             return  
 
-    # 🚧 【鉄壁のガード：複数チャンネル対応版】（クイズ判定の直前に移動）
-    # ※ただし、クイズを「新しく開始するコマンド」や「解答判定」の時だけチャンネル制限をかけます
-    is_quiz_command = message.content in ["!中学クイズ", "!中学クイズおまかせ", "!学術クイズ", "!一般クイズ"]
-    is_answering = (current_quiz is not None) or (user_status in ["quiz_active", "academic_quiz_active", "select_grade", "select_subject", "select_range", "select_content"])
+    # 🎮 7.5. Robloxゲーム内ステータス照会コマンド（追加分）
+    elif message.content.startswith("!roblox_score"):
+        args = message.content.split()
+        if len(args) < 2:
+            await message.channel.send("❌ ユーザー名を指定してください。(例: `!roblox_score PlayerA`)")
+            return
+            
+        target_player = args[1]
+        await message.channel.send(f"🔍 Robloxから {target_player} さんのデータを照会中...")
 
-    if message.guild and (is_quiz_command or is_answering):
+        # Roblox Open Cloud DataStore API のURL
+        url = f"https://roblox.com{UNIVERSE_ID}/standard-datastores/datastore/entries/entry"
+        
+        headers = {
+            "x-api-key": ROBLOX_API_KEY
+        }
+        params = {
+            "datastoreName": DATASTORE_NAME,
+            "entryKey": target_player
+        }
+
+        try:
+            # 💡 requestsを非同期のBotを邪魔しないように実行（または import requests を一番上で行ってください）
+            import requests
+            response = requests.get(url, headers=headers, params=params)
+            if response.status_code == 200:
+                roblox_data = response.json()
+                score = roblox_data.get("Score", 0)
+                level = roblox_data.get("Level", 1)
+                
+                await message.channel.send(
+                    f"🎮 **{target_player} さんのRobloxゲーム内ステータス**\n"
+                    f"• 現在のレベル: **Lv.{level}**\n"
+                    f"• 獲得スコア: **{score} 点** 🏆"
+                )
+            elif response.status_code == 404:
+                await message.channel.send(f"⚠️ {target_player} さんのデータはゲーム内に見つかりませんでした。")
+            else:
+                await message.channel.send("❌ Roblox APIとの通信に失敗しました。")
+        except Exception as e:
+            print(f"Robloxデータ取得エラー: {e}")
+            await message.channel.send("❌ エラーが発生しました。")
+        return
+    # 🚧 【鉄壁のガード：指定チャンネル完全限定版】
+    # 管理者用コマンド以外のすべての一般コマンド・機能を、登録された専用部屋だけでしか動かないように一括制限します！
+    
+    # 🔑 1. どこでも実行できてほしい「管理者用・設定用コマンド」をリストアップして除外する
+    is_admin_command = message.content in [
+        "!admin", "!password-reset", "!github-repositories", 
+        "!supabase-table(quiz_score)", "!rank-toggle", 
+        "!add-quiz-channel", "!remove-quiz-channel"
+    ]
+
+    # 🔑 2. 先頭に「!」がついている一般コマンド、またはクイズ解答中の場合を制限対象にする
+    is_general_command = message.content.startswith("!") and (not is_admin_command)
+    is_currently_answering = (current_quiz is not None) or (user_status in ["quiz_active", "academic_quiz_active", "select_grade", "select_subject", "select_range", "select_content"])
+
+    # 💡 サーバー（Guild）内で、一般コマンドが打たれたかクイズ中のときだけチェックを実行
+    if message.guild and (is_general_command or is_currently_answering):
         guild_id_str = str(message.guild.id)
         target_channel_ids = server_settings.get(guild_id_str, {}).get("quiz_channel_ids", [])
         
+        # 専用チャンネルが1つ以上登録されている場合のみガードを発動
         if target_channel_ids:
+            # 今発言されたチャンネルが、登録されている専用部屋リストに「含まれていない」場合は即座に終了（無視）
             if message.channel.id not in target_channel_ids:
-                return # クイズ関連のときだけ、指定チャンネル以外なら無視する
+                return 
 
     # ==========================================
     # 🎯 クイズの解答判定エリア（出題中のみ実行するように厳格化）
