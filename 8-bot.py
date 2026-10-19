@@ -205,7 +205,9 @@ class AcademicQuizButton(discord.ui.Button):
 
 
 class AcademicQuizView(discord.ui.View):
-    def __init__(self, correct_answer, explanation, options):
+    def __init__(
+        self, correct_answer, explanation, options
+    ):
         super().__init__(timeout=60.0) 
         self.correct_answer = correct_answer
         self.explanation = explanation
@@ -213,43 +215,171 @@ class AcademicQuizView(discord.ui.View):
         shuffled_options = options.copy()
         random.shuffle(shuffled_options)
         
-        # 🎨 ボタンに使う色（スタイル）のリスト
         button_styles = [
-            discord.ButtonStyle.primary,   # 青
-            discord.ButtonStyle.success,   # 緑
-            discord.ButtonStyle.secondary, # グレー
-            discord.ButtonStyle.danger,    # 赤
-            discord.ButtonStyle.primary    # 5個目は青（またはお好みの色に！）
+            discord.ButtonStyle.primary,
+            discord.ButtonStyle.success,
+            discord.ButtonStyle.secondary,
+            discord.ButtonStyle.danger,
+            discord.ButtonStyle.primary
         ]
         
-        # 💡 enumerateを使って、選択肢が何個あっても（5個でも）自動ですべてボタン化する
         for i, opt in enumerate(shuffled_options):
-            # スタイルが足りなくなってもエラーにならないように % でループさせる
             current_style = button_styles[i % len(button_styles)]
-            btn = AcademicQuizButton(label=opt, view_obj=self, style=current_style)
+            btn = AcademicQuizButton(
+                label=opt, 
+                view_obj=self, 
+                style=current_style
+            )
             self.add_item(btn)
 
-    # ボタンが押されたときの正誤判定ロジック（変更なし）
-    async def process_choice(self, interaction: discord.Interaction, chosen_label: str):
+    async def process_choice(
+        self, interaction: discord.Interaction, chosen_label: str
+    ):
         for item in self.children:
             if isinstance(item, discord.ui.Button):
                 item.disabled = True
         
+        # 💡 最新のDiscord仕様に修正（メッセージの見た目を更新）
         await interaction.message.edit(view=self)
 
         user_id = interaction.user.id
         is_correct = (chosen_label == self.correct_answer)
 
         if is_correct:
-            update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
-            await interaction.channel.send(f"💡 {interaction.user.mention} **正解！お見事です（学術クイズ）！🎉**")
-            await interaction.channel.send(f'<:hint:1556661937356546069> 【解説】\n{self.explanation}')
+            update_db_score(
+                user_id, interaction.user.display_name, 
+                is_correct, interaction.message, member=interaction.user
+            )
+            await interaction.channel.send(
+                f"💡 {interaction.user.mention} "
+                f"**正解！お見事です（学術クイズ）！🎉**"
+            )
+            await interaction.channel.send(
+                f'<:hint:1556661937356546069> 【解説】\n{self.explanation}'
+            )
         else:
-            update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
-            await interaction.channel.send(f"😢 {interaction.user.mention} **不正解です...。もう一度挑戦してみてください！**")
-            await interaction.channel.send(f"正解は **【 {self.correct_answer} 】** でした！")
-        # 💡 【重要】メッセージを出し終えたので、Botのクイズ解答待ち状態を完全にクリアする
-        # 💡 解答待ち状態クリア
+            update_db_score(
+                user_id, interaction.user.display_name, 
+                is_correct, interaction.message, member=interaction.user
+            )
+            await interaction.channel.send(
+                f"😢 {interaction.user.mention} "
+                f"**不正解です...。もう一度挑戦してみてください！**"
+            )
+            await interaction.channel.send(
+                f"正解は **【 {self.correct_answer} 】** でした！"
+            )
+
+        # 💡 解答待ち状態クリア（ステップ3のマルチサーバー対応版）
+        global server_current_quiz, server_current_quiz_jh
+        global server_current_quiz_academic, user_status_dict
+        g_id = interaction.guild.id if interaction.guild else 0
+        u_id = interaction.user.id
+        
+        if g_id in server_current_quiz: del server_current_quiz[g_id]
+        if g_id in server_current_quiz_jh: del server_current_quiz_jh[g_id]
+        if g_id in server_current_quiz_academic: del server_current_quiz_academic[g_id]
+        if u_id in user_status_dict: del user_status_dict[u_id]
+
+        self.stop()
+
+
+class MultiChoiceQuizView(discord.ui.View):
+    def __init__(
+        self, correct_answers, explanation, options
+    ):
+        super().__init__(timeout=60.0)
+        self.correct_answers = correct_answers
+        self.explanation = explanation
+        self.selected_buttons = []
+        
+        shuffled_options = options.copy()
+        random.shuffle(shuffled_options)
+        
+        button_styles = [
+            discord.ButtonStyle.primary,
+            discord.ButtonStyle.success,
+            discord.ButtonStyle.secondary,
+            discord.ButtonStyle.danger,
+            discord.ButtonStyle.primary
+        ]
+        
+        for i, opt in enumerate(shuffled_options):
+            current_style = button_styles[i % len(button_styles)]
+            btn = MultiChoiceQuizButton(
+                label=opt, 
+                view_obj=self, 
+                style=current_style
+            )
+            self.add_item(btn)
+
+    async def process_choice(
+        self, 
+        interaction: discord.Interaction, 
+        button: discord.ui.Button
+    ):
+        if (
+            len(self.selected_buttons) >= 2 
+            and button not in self.selected_buttons
+        ):
+            return
+
+        if button in self.selected_buttons:
+            self.selected_buttons.remove(button)
+            button.style = discord.ButtonStyle.secondary
+        else:
+            self.selected_buttons.append(button)
+            button.style = discord.ButtonStyle.primary
+
+        # 💡 【1つ目のボタンのとき】ボタン消失を防ぐ最新の書き方に修正
+        if len(self.selected_buttons) < 2:
+            await interaction.message.edit(view=self)
+            return
+
+        # 🚨 【2つのボタンが揃ったら】すべてのボタンをロックして答え合わせ
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+                if item.label in self.correct_answers:
+                    item.style = discord.ButtonStyle.success
+                elif item in self.selected_buttons:
+                    item.style = discord.ButtonStyle.danger
+
+        # 💡 ボタンの見た目を確定（最新仕様）
+        await interaction.message.edit(view=self)
+
+        user_id = interaction.user.id
+        user_choices = [btn.label for btn in self.selected_buttons]
+        is_all_correct = all(
+            ans in user_choices for ans in self.correct_answers
+        )
+
+        if is_all_correct:
+            update_db_score(
+                user_id, interaction.user.display_name, 
+                True, interaction.message, member=interaction.user
+            )
+            await interaction.channel.send(
+                f"💡 {interaction.user.mention} "
+                f"**大正解！2つの選択肢を完璧に見抜きました！🎉**"
+            )
+            await interaction.channel.send(
+                f'<:hint:1556661937356546069> 【解説】\n{self.explanation}'
+            )
+        else:
+            update_db_score(
+                user_id, interaction.user.display_name, 
+                False, interaction.message, member=interaction.user
+            )
+            correct_text = " と ".join(
+                [f"【{a}】" for a in self.correct_answers]
+            )
+            await interaction.channel.send(
+                f"😢 {interaction.user.mention} **残念、不正解です...。**\n"
+                f"正解は {correct_text} でした！"
+            )
+        
+        # 💡 マルチサーバー用の解答待ち状態クリア処理（完全分離）
         global server_current_quiz
         global server_current_quiz_jh
         global server_current_quiz_academic
@@ -344,107 +474,6 @@ class RouletteView(discord.ui.View):
     async def on_timeout(self):
         self.button.disabled = True
         self.button.label = "❌ 時間切れ（無効）"
-        self.stop()
-
-class MultiChoiceQuizView(discord.ui.View):
-    def __init__(self, correct_answers, explanation, options):
-        super().__init__(timeout=60.0)
-        self.correct_answers = correct_answers  # 💡 正解のリスト（例: ["A", "B"]）
-        self.explanation = explanation
-        self.selected_buttons = []  # ユーザーが選択したボタンを記録
-        
-        shuffled_options = options.copy()
-        random.shuffle(shuffled_options)
-        
-        button_styles = [
-            discord.ButtonStyle.primary,
-            discord.ButtonStyle.success,
-            discord.ButtonStyle.secondary,
-            discord.ButtonStyle.danger,
-            discord.ButtonStyle.primary
-        ]
-        
-        for i, opt in enumerate(shuffled_options):
-            current_style = button_styles[i % len(button_styles)]
-            btn = MultiChoiceQuizButton(label=opt, view_obj=self, style=current_style)
-            self.add_item(btn)
-
-    async def process_choice(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # 💡 ここから下は「半差スペース8個分（赤線のさらに右）」に引っ込めて縦ラインを揃えます
-        
-        # 既に2つ選ばれて処理中の場合は何もしない
-        if len(self.selected_buttons) >= 2 and button not in self.selected_buttons:
-            return
-
-        # 🔄 トグル処理：すでに選ばれているボタンをもう一度押したら「選択解除」にする
-        if button in self.selected_buttons:
-            self.selected_buttons.remove(button)
-            button.style = discord.ButtonStyle.secondary  # グレーに戻す
-        else:
-            # 新しく選択されたら青色（Primary）に変える
-            self.selected_buttons.append(button)
-            button.style = discord.ButtonStyle.primary
-
-        # 💡 【1つ目のボタンのとき】
-        # interaction.response.defer() の後は、edit_original_response を使うのがDiscordの絶対ルール！
-        if len(self.selected_buttons) < 2:
-            await interaction.edit_original_response(view=self)
-            return
-
-        # 🚨 【2つのボタンが揃ったら】正誤判定に突入！
-        # 連打や修正を防ぐためにすべてのボタンを無効化（ロック）
-        for item in self.children:
-            if isinstance(item, discord.ui.Button):
-                item.disabled = True
-                # 正解のボタンは緑色（Success）に、不正解は赤色（Danger）に変えて答え合わせ
-                if item.label in self.correct_answers:
-                    item.style = discord.ButtonStyle.success
-                elif item in self.selected_buttons:
-                    item.style = discord.ButtonStyle.danger
-
-        # 💡 ここも同様に edit_original_response でボタンの見た目を確定させます
-        await interaction.edit_original_response(view=self)
-
-        user_id = interaction.user.id
-        # ユーザーが選んだ2つの選択肢（テキスト）のリスト
-        user_choices = [btn.label for btn in self.selected_buttons]
-
-        # 💡 2つの正解が両方とも含まれているかをチェック（順不同）
-        is_all_correct = all(ans in user_choices for ans in self.correct_answers)
-
-        # 🚨 ここを修正：True固定ではなく、実際の判定結果（is_all_correct）を正しく関数に引き渡します！
-        if is_all_correct:
-            # 見事両方正解なら、is_correct=True としてスコアを+1加算
-            update_db_score(user_id, interaction.user.display_name, True, interaction.message, member=interaction.user)
-            await interaction.channel.send(f"💡 {interaction.user.mention} **大正解！2つの選択肢を完璧に見抜きました！🎉**")
-            await interaction.channel.send(f'<:hint:1556661937356546069> 【解説】\n{self.explanation}')
-        else:
-            # 1つでも間違えていたら、is_correct=False として不正解（wrong_count）を+1加算
-            update_db_score(user_id, interaction.user.display_name, False, interaction.message, member=interaction.user)
-            correct_text = " と ".join([f"【{a}】" for a in self.correct_answers])
-            await interaction.channel.send(f"😢 {interaction.user.mention} **残念、不正解です...。**\n正解は {correct_text} でした！")
-        
-        # 💡 解答待ち状態クリア
-        global server_current_quiz
-        global server_current_quiz_jh
-        global server_current_quiz_academic
-        global user_status_dict
-        
-        g_id = (
-            interaction.guild.id 
-            if interaction.guild else 0
-        )
-        u_id = interaction.user.id
-        
-        if g_id in server_current_quiz: 
-            del server_current_quiz[g_id]
-        if g_id in server_current_quiz_jh: 
-            del server_current_quiz_jh[g_id]
-        if g_id in server_current_quiz_academic: 
-            del server_current_quiz_academic[g_id]
-        if u_id in user_status_dict: 
-            del user_status_dict[u_id]
-
         self.stop()
 
 # ==========================================
@@ -827,6 +856,7 @@ async def on_message(message):
                 f'<:hint:1556661937356546069> 【ヒント】\n'
                 f'{quiz_data["hint"]}'
             )
+            del server_current_quiz[guild_id] # 💡 不正解でも部屋を片付ける
         return
 
     # 2. 学術クイズ（テキスト形式）の解答判定
@@ -872,6 +902,9 @@ async def on_message(message):
                 f'<:hint:1556661937356546069> 【ヒント】\n'
                 f'{quiz_data["hint"]}'
             )
+            del server_current_quiz_academic[guild_id] # 💡 不正解でも片付ける
+            if user_id in user_status_dict:
+                del user_status_dict[user_id]
         return
 
     # 3. 中学クイズの解答判定
@@ -915,6 +948,9 @@ async def on_message(message):
                 f'<:hint:1556661937356546069> 【ヒント】 \n'
                 f'{quiz_data["hint"]}'
             )
+            del server_current_quiz_jh[guild_id] # 💡 不正解でも片付ける
+            if user_id in user_status_dict:
+                del user_status_dict[user_id]
         return
 
     # 🛑 中断コマンド
@@ -1397,21 +1433,39 @@ async def on_message(message):
         return
 
     # ==========================================
-    # 🔮 【Supabase連動】1日1回制限付き：今日の運勢・明日の運勢 占い機能
+    # 🔮 【修正版】今日の運勢・明日の運勢 占い機能
     # ==========================================
     if message.content in ["!今日の運勢", "!明日の運勢"]:
         user_id = message.author.id
-        day_type = "today" if message.content == "!今日の運勢" else "tomorrow"
+        day_type = (
+            "today" 
+            if message.content == "!今日の運勢" 
+            else "tomorrow"
+        )
         day_text = "今日" if day_type == "today" else "明日"
         
-        # 📅 【バグ対策版】確実に日本時間の日付文字列（年-月-日）を生成する
         import datetime
-        current_date_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime("%Y-%m-%d")
+        current_date_str = (
+            datetime.datetime.now(
+                datetime.timezone(
+                    datetime.timedelta(hours=9)
+                )
+            ).strftime("%Y-%m-%d")
+        )
 
-        # 占い結果用のデータセット
-        fortunes = ["🌟 超大吉", "✨ 大吉", "🎵 中吉", "😊 小吉", "🍀 吉", "💤 末吉", "☔ 凶","✖大凶"]
-        colors = ["赤色", "青色", "黄色", "緑色", "ピンク", "紫色", "オレンジ色", "白色", "黒色", "ゴールド"]
-        items = ["お気に入りのペン", "クイズの参考書", "スマホ", "いつもと違う靴下", "マイボトル", "ハンカチ", "お菓子"]
+        fortunes = [
+            "🌟 超大吉", "✨ 大吉", "🎵 中吉", 
+            "😊 小吉", "🍀 吉", "💤 末吉", 
+            "☔ 凶", "✖大凶"
+        ]
+        colors = [
+            "赤色", "青色", "黄色", "緑色", "ピンク", 
+            "紫色", "オレンジ色", "白色", "黒色", "ゴールド"
+        ]
+        items = [
+            "お気に入りのペン", "クイズの参考書", "スマホ", 
+            "いつもと違う靴下", "マイボトル", "ハンカチ", "お菓子"
+        ]
         
         fortune = random.choice(fortunes)
         color = random.choice(colors)
@@ -1419,40 +1473,56 @@ async def on_message(message):
         
         embed = discord.Embed(
             title=f"🔮 ひろねこ占い（{day_text}の運勢）",
-            description=f"{message.author.mention} さんの{day_text}の運勢を占いました！",
+            description=(
+                f"{message.author.mention} さんの"
+                f"{day_text}の運勢を占いました！"
+            ),
             color=discord.Color.purple()
         )
-        embed.add_field(name="✨ 総合運", value=f"**{fortune}**", inline=False)
+        embed.add_field(
+            name="✨ 総合運", 
+            value=f"**{fortune}**", 
+            inline=False
+        )
         embed.add_field(name="🎨 ラッキーカラー", value=color, inline=True)
         embed.add_field(name="🎒 ラッキーアイテム", value=item, inline=True)
-        embed.set_footer(text="占いは1日1回のお楽しみ！良い1日になりますように。")
+        embed.set_footer(
+            text="占いは1日1回のお楽しみ！良い1日になりますように。"
+        )
 
         try:
-            # 1. データベースからユーザーの既存データを取得
-            response = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
+            response = (
+                supabase.table("user_scores")
+                .select("*")
+                .eq("user_id", user_id)
+                .execute()
+            )
             
             last_date = None
             correct_count = 0
             wrong_count = 0
             is_rank_enabled = True
 
+            # 💡 データが存在するときだけ安全に中身を読み込む
             if response.data and len(response.data) > 0:
-                current_status = response.data[0].get("is_rank_enabled", True) # 👈 [0]を追加
-                correct_count = response.data[0].get("correct_count", 0)       # 👈 [0]を追加
-                wrong_count = response.data[0].get("wrong_count", 0)           # 👈 [0]を追加
-                is_rank_enabled = response.data[0].get("is_rank_enabled", True)
+                user_data = response.data[0]
+                correct_count = user_data.get("correct_count", 0)
+                wrong_count = user_data.get("wrong_count", 0)
+                is_rank_enabled = user_data.get("is_rank_enabled", True)
                 
-            if day_type == "today":
-                last_date = response.data[0].get("last_fortune_date")
-            else:
-                last_date = response.data[0].get("last_tomorrow_fortune_date")
+                if day_type == "today":
+                    last_date = user_data.get("last_fortune_date")
+                else:
+                    last_date = user_data.get("last_tomorrow_fortune_date")
 
-            # 2. 制限チェック：【鉄壁のバグ対策】取得した値に今日の日付文字列が含まれているかを検証
             if last_date and (current_date_str in str(last_date)):
-                await message.channel.send(f"⚠️ {message.author.mention} さん、**{day_text}の運勢はすでに占われています！** また明日挑戦してね！")
+                await message.channel.send(
+                    f"⚠️ {message.author.mention} さん、"
+                    f"**{day_text}の運勢はすでに占われています！** "
+                    f"また明日挑戦してね！"
+                )
                 return
 
-            # 3. データを上書き保存（upsert）するための準備
             update_data = {
                 "user_id": user_id,
                 "username": message.author.display_name,
@@ -1461,22 +1531,20 @@ async def on_message(message):
                 "is_rank_enabled": is_rank_enabled,
                 "updated_at": "now()"
             }
-            
             if day_type == "today":
                 update_data["last_fortune_date"] = current_date_str
             else:
                 update_data["last_tomorrow_fortune_date"] = current_date_str
 
-            # 4. Supabaseへ保存を実行
             supabase.table("user_scores").upsert(update_data).execute()
-            
-            # 5. 無事に保存できたら占い結果を送信！
             await message.channel.send(embed=embed)
 
         except Exception as e:
             print(f"占いデータベース処理エラー: {e}")
-            # エラー時にお友達に連打されるのを防ぐため、安全装置を「お詫びメッセージ」に変更
-            await message.channel.send("❌ データベースとの通信でエラーが発生したため、現在占いを制限しています。少し時間を置いてお試しください。")
+            await message.channel.send(
+                "❌ データベースとの通信でエラーが発生したため、"
+                "現在占いを制限しています。"
+            )
         return
     # 💬 8. 定型文・その他挨拶機能（ここへ続く）
     if message.content == "!こんにちは":
