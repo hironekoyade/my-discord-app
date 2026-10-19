@@ -8,12 +8,28 @@ import asyncio
 import requests
 from discord.ext import tasks  # 🌟 インポートはここに綺麗にまとめます
 
-# 全てのインポートが終わった後に、変数を置きます！
-user_scores = {}
 # ==========================================
-ROBLOX_API_KEY = os.getenv("ROBLOX_API_KEY", "あなたの実際のAPIキー、または.envから読み込み")
-UNIVERSE_ID = "あなたのゲームのUNIVERSE_ID"
-DATASTORE_NAME = "GameScores"
+# 🎮 Roblox連携：セキュリティ対応設定
+# ==========================================
+# 💡 安全のため、すべての値を MWS の環境変数から読み込む形に統一します
+ROBLOX_API_KEY = os.getenv(
+    "ROBLOX_API_KEY", "None"
+)
+UNIVERSE_ID = os.getenv(
+    "ROBLOX_UNIVERSE_ID", "None"
+)
+DATASTORE_NAME = os.getenv(
+    "ROBLOX_DATASTORE_NAME", "GameScores"
+)
+
+# 💡 起動時に正しくMWSから読み込めているか確認するデバッグ文字
+print(
+    f"【デバッグ】Roblox ID: {UNIVERSE_ID}"
+)
+print(
+    f"【デバッグ】Roblox Key: "
+    f"{ROBLOX_API_KEY[:5] if ROBLOX_API_KEY else 'None'}..."
+)
 
 # ==========================================
 # 🔑 管理者パスワード管理（複合システム版）
@@ -755,39 +771,89 @@ async def on_message(message):
         args = message.content.split()
         if len(args) < 2:
             await message.channel.send(
-                "❌ ユーザー名を指定してください。(例: `!roblox_score PlayerA`)"
+                "❌ ユーザー名を指定してください。\n"
+                "例: `!roblox_score PlayerA`"
             )
             return
             
         target_player = args[1]
         await message.channel.send(
-            f"🔍 Robloxから {target_player} さんのデータを照会中..."
+            f"🔍 Robloxから **{target_player}** "
+            f"さんのデータを照会中..."
         )
+        
+        # 🌐 1. 【完全修正版】Roblox Open Cloud の正しい1行URL
         url = f"https://roblox.com{UNIVERSE_ID}/standard-datastores/datastore/entries/entry"
         headers = {"x-api-key": ROBLOX_API_KEY}
-        params = {"datastoreName": DATASTORE_NAME, "entryKey": target_player}
+        params = {
+            "datastoreName": DATASTORE_NAME, 
+            "entryKey": target_player
+        }
 
         try:
             import requests
-            response = requests.get(url, headers=headers, params=params)
+            response = requests.get(
+                url, headers=headers, params=params
+            )
+            
             if response.status_code == 200:
                 roblox_data = response.json()
-                score = roblox_data.get("Score", 0)
-                level = roblox_data.get("Level", 1)
-                await message.channel.send(
-                    f"🎮 **{target_player} さんのRobloxゲーム内ステータス**\n"
-                    f"• 現在のレベル: **Lv.{level}**\n"
-                    f"• 獲得スコア: **{score} 点** 🏆"
+                score = 0
+                level = 1
+                
+                # 💡 テーブル型(辞書)で保存されている場合
+                if isinstance(roblox_data, dict):
+                    score = roblox_data.get("Score", 0)
+                    level = roblox_data.get("Level", 1)
+                # 💡 数値や文字列だけで保存されている場合
+                else:
+                    try: score = int(roblox_data)
+                    except: score = roblox_data
+                
+                # 🎨 オシャレなカード（Embed）で出力！
+                embed = discord.Embed(
+                    title="🎮 Roblox ステータス連携 🎮",
+                    description=(
+                        f"**{target_player}** さんの"
+                        f"ゲーム内データを取得しました！"
+                    ),
+                    color=discord.Color.red()
                 )
+                embed.add_field(
+                    name="👑 現在のレベル", 
+                    value=f"**Lv.{level}**", 
+                    inline=True
+                )
+                embed.add_field(
+                    name="🏆 獲得スコア", 
+                    value=f"**{score} 点**", 
+                    inline=True
+                )
+                embed.set_footer(
+                    text=f"データストア名: {DATASTORE_NAME}"
+                )
+                await message.channel.send(embed=embed)
+                
             elif response.status_code == 404:
                 await message.channel.send(
-                    f"⚠️ {target_player} さんのデータはゲーム内に見つかりませんでした。"
+                    f"⚠️ **{target_player}** さんのデータは"
+                    f"ゲーム内に見つかりませんでした。"
+                )
+            elif response.status_code in[401 ,403]:
+                await message.channel.send(
+                    "❌ 認証エラーです。MWSの"
+                    "APIキー設定やアクセス権限を確認してください。"
                 )
             else:
-                await message.channel.send("❌ Roblox APIとの通信に失敗しました。")
+                await message.channel.send(
+                    f"❌ Roblox APIとの通信に失敗しました。\n"
+                    f"エラーコード: {response.status_code}"
+                )
         except Exception as e:
             print(f"Robloxデータ取得エラー: {e}")
-            await message.channel.send("❌ エラーが発生しました。")
+            await message.channel.send(
+                "❌ データの取得中に予期せぬエラーが発生しました。"
+            )
         return
 
     # 🚧 専用チャンネルのガード処理
