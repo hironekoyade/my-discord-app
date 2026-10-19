@@ -1204,7 +1204,7 @@ async def on_message(message):
         
         # 📅 【バグ対策版】確実に日本時間の日付文字列（年-月-日）を生成する
         import datetime
-        current_date_str = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).strftime("%Y-%m-%d")
+        current_date_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime("%Y-%m-%d")
 
         # 占い結果用のデータセット
         fortunes = ["🌟 超大吉", "✨ 大吉", "🎵 中吉", "😊 小吉", "🍀 吉", "💤 末吉", "☔ 凶","✖大凶"]
