@@ -1143,7 +1143,7 @@ async def on_message(message):
         else:
             details = " ＋ ".join([f"[{r}]" for r in results])
             await message.channel.send(f"🎲 1 〜 {max_value} のサイコロを **{dice_count} 個** 振りました！\n内訳: {details}\n合計は **【 {total} 】** です！")
-        return
+            return  # 👈 頭に半角スペースを4つ足して、他の行と縦のラインを綺麗に揃えます！
 
     # ==========================================
     # 🎰 【ここを追加・修正！】ルーレット機能コマンドの本体
