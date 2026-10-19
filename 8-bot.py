@@ -1207,7 +1207,7 @@ async def on_message(message):
         current_date_str = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).strftime("%Y-%m-%d")
 
         # 占い結果用のデータセット
-        fortunes = ["🌟 超大吉", "✨ 大吉", "🎵 中吉", "😊 小吉", "🍀 吉", "💤 末吉", "☔ 凶"]
+        fortunes = ["🌟 超大吉", "✨ 大吉", "🎵 中吉", "😊 小吉", "🍀 吉", "💤 末吉", "☔ 凶","✖大凶"]
         colors = ["赤色", "青色", "黄色", "緑色", "ピンク", "紫色", "オレンジ色", "白色", "黒色", "ゴールド"]
         items = ["お気に入りのペン", "クイズの参考書", "スマホ", "いつもと違う靴下", "マイボトル", "ハンカチ", "お菓子"]
         
