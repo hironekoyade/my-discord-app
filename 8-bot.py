@@ -1498,38 +1498,31 @@ async def on_message(message):
                 .eq("user_id", user_id)
                 .execute()
             )
-            
+
             last_date = None
             correct_count = 0
             wrong_count = 0
             is_rank_enabled = True
 
-            # 💡 データがある時だけ、[0]を使って安全に読み込みます
+            # 💡 データがある時だけ [0] を安全に取得
             if res.data and len(res.data) > 0:
-                user_data = res.data[0] # 👈 ここで[0]を一括適用！
+                user_data = res.data[0]
                 
-                correct_count = user_data.get(
-                    "correct_count", 0
-                )
-                wrong_count = user_data.get(
-                    "wrong_count", 0
-                )
-                is_rank_enabled = user_data.get(
-                    "is_rank_enabled", True
-                )
-                
-                # 💡 ここも user_data を使うようにしてバグを完全に修正！
+                correct_count = user_data.get("correct_count", 0)
+                wrong_count = user_data.get("wrong_count", 0)
+                is_rank_enabled = user_data.get("is_rank_enabled", True)
+
                 if day_type == "today":
-                    last_date = user_data.get(
-                        "last_fortune_date"
-                    )
+                    last_date = user_data.get("last_fortune_date")
                 else:
-                    last_date = user_data.get(
-                        "last_tomorrow_fortune_date"
-                    )
+                    last_date = user_data.get("last_tomorrow_fortune_date")
+            else:
+                # 💡 データがなかった場合（新規ユーザーなど）は、初期値のまま進む
+                pass
 
             # 2. 制限チェック
-            if last_date and (current_date_str in str(last_date)):
+            # 💡 完全一致 (==) で比較する方が、予期せぬ部分一致によるバグを防げて安全です
+            if last_date and (str(last_date) == current_date_str):
                 await message.channel.send(
                     f"⚠️ {message.author.mention} さん、"
                     f"**{day_text}の運勢はすでに占われています！** "
