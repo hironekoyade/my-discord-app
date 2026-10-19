@@ -1137,6 +1137,7 @@ async def on_message(message):
         results = [random.randint(1, max_value) for _ in range(dice_count)]
         total = sum(results)
 
+        # （省略）... !サイコロ機能の一番最後の部分
         if dice_count == 1:
             await message.channel.send(f"🎲 1 〜 {max_value} のサイコロを振りました！ 出た目は **【 {total} 】** です！")
         else:
@@ -1144,7 +1145,39 @@ async def on_message(message):
             await message.channel.send(f"🎲 1 〜 {max_value} のサイコロを **{dice_count} 個** 振りました！\n内訳: {details}\n合計は **【 {total} 】** です！")
         return
 
-    # 💬 8. 定型文・その他挨拶機能（重複を排除した決定版）
+    # ==========================================
+    # 🎰 【ここを追加・修正！】ルーレット機能コマンドの本体
+    # ==========================================
+    if message.content.startswith("!ルーレット"):
+        args = message.content.split()
+        
+        # 1. 引数がない場合（使い方の説明）
+        if len(args) == 1:
+            await message.channel.send(
+                "❌ 項目を指定してください！\n"
+                "• 自由入力： `!ルーレット 焼肉 寿司 ラーメン` （スペース区切り）\n"
+                "• 数値指定： `!ルーレット 100` （1〜100から自動抽選）"
+            )
+            return
+
+        options = []
+        # 2. 数値指定の場合（例: !ルーレット 100）
+        if len(args) == 2 and args[1].isdigit():
+            max_num = int(args[1])
+            if max_num < 2:
+                await message.channel.send("❌ 2以上の数値を指定してください。")
+                return
+            options = [str(i) for i in range(1, max_num + 1)]
+        # 3. スペース区切りで項目が並んでいる場合
+        else:
+            options = args[1:]
+
+        # すでに実装されているボタン式ルーレットのViewを呼び出す
+        view = RouletteView(options)
+        await message.channel.send("🎰 ボタンを押すとルーレットの抽選が始まります！", view=view)
+        return
+
+    # 💬 8. 定型文・その他挨拶機能（ここへ続く）
     if message.content == "!こんにちは":
         await message.channel.send("こんにちは！")
         return
