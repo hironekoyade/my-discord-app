@@ -769,18 +769,22 @@ async def on_message(message):
             await message.channel.send("❌ Bot側でBloxlinkのAPIキー（BLOXLINK_API_KEY）が設定されていません。")
             return
 
-        # 🌐 1. Bloxlink v4 API：バグの起きない最も確実な文字列結合でURLを作成
+        # 🌐 1. サーバーキー専用のBloxlink v4 エンドポイントURLを作成
         guild_id = message.guild.id if message.guild else 0
-        bloxlink_url = "https://blox.link/v4/public/" + str(guild_id) + "/discord-to-roblox/" + str(user_id)
+        bloxlink_url = f"https://blox.link{guild_id}/discord-to-roblox/{user_id}"
         
         try:
             import requests
             session = requests.Session()
             session.trust_env = False
             
-            # MWSから読み込んだ環境変数をヘッダーにセット
+            # 💡 サーバーキーを使用する場合は、キーの前に「Bearer 」を付ける必要があります
+            api_key = BLOXLINK_API_KEY
+            if not api_key.startswith("Bearer "):
+                api_key = f"Bearer {api_key}"
+
             bloxlink_headers = {
-                "Authorization": BLOXLINK_API_KEY
+                "Authorization": api_key
             }
             
             bloxlink_response = session.get(
@@ -789,7 +793,13 @@ async def on_message(message):
                 proxies={"http": None, "https": None}
             )
             
-            if bloxlink_response.status_code != 200:
+            # 💡 もし403が出る場合の追加情報デバッグ
+            if bloxlink_response.status_code == 403:
+                await message.channel.send(
+                    "❌ 403エラーが返されました。MWSに設定したキーが、ダッシュボードの「my鯖」のキーと完全に一致しているか、前後に余計なスペースが入っていないか確認してください。"
+                )
+                return
+            elif bloxlink_response.status_code != 200:
                 await message.channel.send(
                     f"❌ Bloxlinkからのデータ取得に失敗しました。\n"
                     f"（エラーコード: {bloxlink_response.status_code}）"
