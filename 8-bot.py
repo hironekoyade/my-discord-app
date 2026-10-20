@@ -764,7 +764,7 @@ async def on_message(message):
         )
         
         # 🔗 1. Bloxlinkの公式APIを使って、このDiscordユーザーのRobloxユーザー名を取得する
-        bloxlink_url = f"https://blox.link{user_id}"
+        bloxlink_url = f"https://blox.link/v1/user/{user_id}"
         bloxlink_response = requests.get(bloxlink_url)
         
         if bloxlink_response.status_code != 200:
