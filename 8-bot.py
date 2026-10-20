@@ -21,7 +21,8 @@ UNIVERSE_ID = os.getenv(
 DATASTORE_NAME = os.getenv(
     "ROBLOX_DATASTORE_NAME", "GameScores"
 )
-
+# 🔒 【安全に追記】Bloxlinkの鍵もMWSの環境変数から引っ張ってくる
+BLOXLINK_API_KEY = os.getenv("BLOXLINK_API_KEY")
 # 💡 起動時に正しくMWSから読み込めているか確認するデバッグ文字
 print(
     f"【デバッグ】Roblox ID: {UNIVERSE_ID}"
@@ -762,43 +763,55 @@ async def on_message(message):
             f"🔍 {message.author.mention} さんのDiscord IDから、"
             f"Bloxlinkに登録されているRobloxアカウントを照会中..."
         )
-        
-        # 🔗 1. Bloxlinkの公式APIを使って、このDiscordユーザーのRobloxユーザー名を取得する
+
         bloxlink_url = f"https://blox.link/v1/user/{user_id}"
-        bloxlink_response = requests.get(bloxlink_url)
         
-        if bloxlink_response.status_code != 200:
-            await message.channel.send(
-                f"❌ Bloxlinkからアカウント情報を取得できませんでした。\n"
-                f"先にBloxlink（ https://blox.link ）でアカウント連携を完了させてください。"
-            )
-            return
-            
-        bloxlink_data = bloxlink_response.json()
-        # APIの返り値からRobloxのユーザー名（Name）を抜き出す
-        target_player = bloxlink_data.get("robloxUsername")
-        
-        if not target_player:
-            await message.channel.send(
-                f"❌ あなたのDiscordアカウントに紐づくRobloxユーザー名が見つかりませんでした。"
-            )
-            return
-
-        await message.channel.send(
-            f"🎯 連携アカウント **@{target_player}** さんを確認しました！\n"
-            f"続けてRobloxのゲーム内データを読み込みます..."
-        )
-        
-        # 🌐 2. 判明した本人のユーザー名を使って、あなたのゲームのDataStoreを見に行く
-        url = f"https://roblox.com{UNIVERSE_ID}/standard-datastores/datastore/entries/entry"
-        headers = {"x-api-key": ROBLOX_API_KEY}
-        params = {
-            "datastoreName": DATASTORE_NAME, 
-            "entryKey": target_player
-        }
-
         try:
-            response = requests.get(url, headers=headers, params=params)
+            import requests
+            session = requests.Session()
+            session.trust_env = False
+            
+            # 🛡️ 直書きせず、環境変数から読み込んだ変数名をそのままセットします！
+            bloxlink_headers = {
+                "Authorization": BLOXLINK_API_KEY
+            }
+            
+            bloxlink_response = session.get(
+                bloxlink_url, 
+                headers=bloxlink_headers, 
+                proxies={"http": None, "https": None}
+            )
+            
+            if bloxlink_response.status_code != 200:
+                await message.channel.send(
+                    f"❌ Bloxlinkからのデータ取得に失敗しました。\n"
+                    f"（エラーコード: {bloxlink_response.status_code}）"
+                )
+                return
+                
+            bloxlink_data = bloxlink_response.json()
+            target_player = bloxlink_data.get("robloxUsername")
+            
+            if not target_player:
+                await message.channel.send(
+                    f"❌ あなたのDiscordアカウントに紐づくRobloxユーザー名が見つかりませんでした。"
+                )
+                return
+
+            await message.channel.send(
+                f"🎯 連携アカウント **@{target_player}** さんを確認しました！\n"
+                f"続けてRobloxのゲーム内データを読み込みます..."
+            )
+            
+            # 🌐 2. 判明した名前を使って、あなたのゲームのDataStoreを見に行く
+            url = f"https://roblox.com{UNIVERSE_ID}/standard-datastores/datastore/entries/entry"
+            headers = {"x-api-key": ROBLOX_API_KEY}
+            params = {
+                "datastoreName": DATASTORE_NAME, 
+                "entryKey": target_player
+            }
+
+            response = session.get(url, headers=headers, params=params, proxies={"http": None, "https": None})
             
             if response.status_code == 200:
                 roblox_data = response.json()
@@ -826,7 +839,7 @@ async def on_message(message):
                 await message.channel.send(
                     f"⚠️ **@{target_player}** さんのデータは、あなたのゲーム内にまだ保存されていません。"
                 )
-            elif response.status_code in[401, 403]:
+            elif response.status_code == 401 or response.status_code == 403:
                 await message.channel.send(
                     "❌ 認証エラーです。MWSのAPIキー設定やアクセス権限を確認してください。"
                 )
