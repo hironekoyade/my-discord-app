@@ -771,7 +771,7 @@ async def on_message(message):
 
         current_guild_id = message.guild.id if message.guild else 0
         # v4用の正しいドメインとエンドポイントのパスに修正し、f文字列で綺麗に結合します
-        final_bloxlink_url = f"https://blox.link{current_guild_id}/discord-to-roblox/{user_id}"
+        final_bloxlink_url = f"https://blox.link/{current_guild_id}/discord-to-roblox/{user_id}"
 
         try:
             import requests
