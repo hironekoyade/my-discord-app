@@ -769,9 +769,14 @@ async def on_message(message):
             await message.channel.send("❌ Bot側でBloxlinkのAPIキー（BLOXLINK_API_KEY）が設定されていません。")
             return
 
-        # 🌐 1. Bloxlink v4 API：サーバーIDとユーザーIDを組み合わせてURLを作る
+        # 🌐 1. Bloxlink v4 API：URLの文字列結合バグを防ぐため、安全に組み立てる
         guild_id = message.guild.id if message.guild else 0
-        bloxlink_url = f"https://blox.link{guild_id}/discord-to-roblox/{user_id}"
+        
+        # 💡 スラッシュの有無でURLが壊れないように安全に結合します
+        from urllib.parse import urljoin
+        base_url = "https://blox.link/v4/public/"
+        path = f"guilds/{guild_id}/discord-to-roblox/{user_id}"
+        bloxlink_url = urljoin(base_url, path)
         
         try:
             import requests
@@ -798,7 +803,7 @@ async def on_message(message):
                 
             bloxlink_data = bloxlink_response.json()
             
-            # 💡 【重要】Bloxlink v4のネスト（階層化）されたデータ構造からユーザー名を取得
+            # 💡 Bloxlink v4のデータ構造からユーザー名を取得
             resolved_data = bloxlink_data.get("resolved", {})
             target_player = resolved_data.get("robloxUsername")
             
@@ -813,7 +818,7 @@ async def on_message(message):
                 f"続けてRobloxのゲーム内データを読み込みます..."
             )
             
-            # 🌐 2. 判明した名前を使って、RobloxのDataStoreを見に行く（URLの崩れを修正）
+            # 🌐 2. 判明した名前を使って、RobloxのDataStoreを見に行く
             url = f"https://roblox.com{UNIVERSE_ID}/standard-datastores/datastore/entries/entry"
             headers = {"x-api-key": ROBLOX_API_KEY}
             params = {
@@ -842,14 +847,14 @@ async def on_message(message):
                 )
                 embed.add_field(name="👑 現在のレベル", value=f"**Lv.{level}**", inline=True)
                 embed.add_field(name="🏆 獲得スコア", value=f"**{score} 点**", inline=True)
-                embed.set_footer(text=f"データストア名: {DATASTORE_NAME} | 認証: Bloxlink v4")
+                embed.set_footer(text=f"データストア name: {DATASTORE_NAME} | 認証: Bloxlink v4")
                 await message.channel.send(embed=embed)
                 
             elif response.status_code == 404:
                 await message.channel.send(
                     f"⚠️ **@{target_player}** さんのデータは、あなたのゲーム内にまだ保存されていません。"
                 )
-            elif response.status_code in[401 ,403]:
+            elif response.status_code in[403 ,410]:
                 await message.channel.send(
                     "❌ 認証エラーです。MWSのRoblox APIキー設定やアクセス権限を確認してください。"
                 )
