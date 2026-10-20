@@ -778,8 +778,9 @@ async def on_message(message):
             session = requests.Session()
             session.trust_env = False
             
+            # 💡 Bearer を付けず、環境変数のキーをそのままセットしてみる
             bloxlink_headers = {
-                "Authorization": f"Bearer {str(BLOXLINK_API_KEY).strip()}"
+                "Authorization": str(BLOXLINK_API_KEY).strip()
             }
             
             bloxlink_response = session.get(
