@@ -769,10 +769,10 @@ async def on_message(message):
             await message.channel.send("❌ Bot側でBloxlinkのAPIキー（BLOXLINK_API_KEY）が設定されていません。")
             return
 
-        # 🌐 1. 他のコードと絶対に干渉しない安全な変数名でURLを作成
         current_guild_id = message.guild.id if message.guild else 0
-        final_bloxlink_url = "https://blox.link" + str(current_guild_id) + "/discord-to-roblox/" + str(user_id)
-        
+        # v4用の正しいドメインとエンドポイントのパスに修正し、f文字列で綺麗に結合します
+        final_bloxlink_url = f"https://blox.link/{current_guild_id}/discord-to-roblox/{user_id}"
+
         try:
             import requests
             session = requests.Session()
