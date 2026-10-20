@@ -774,20 +774,14 @@ async def on_message(message):
         final_bloxlink_url = f"https://blox.link/v4/{current_guild_id}/discord-to-roblox/{user_id}"
 
         try:
-            import requests
             session = requests.Session()
-            session.trust_env = False
             
             # 💡 Bearer を付けず、環境変数のキーをそのままセットしてみる
             bloxlink_headers = {
                 "Authorization": str(BLOXLINK_API_KEY).strip()
             }
             
-            bloxlink_response = session.get(
-                final_bloxlink_url, 
-                headers=bloxlink_headers, 
-                proxies={"http": None, "https": None}
-            )
+            bloxlink_response = session.get(final_bloxlink_url, headers=bloxlink_headers)
             
             if bloxlink_response.status_code != 200:
                 await message.channel.send(
@@ -810,7 +804,7 @@ async def on_message(message):
 
             # RobloxユーザーIDからユーザー名（Username）を取得する（DataStoreのEntryKey用）
             user_info_url = f"https://users.roblox.com/v1/users/{roblox_user_id}"
-            user_info_response = session.get(user_info_url, proxies={"http": None, "https": None})
+            user_info_response = session.get(user_info_url)
             
             if user_info_response.status_code == 200:
                 target_player = user_info_response.json().get("name")
@@ -835,7 +829,7 @@ async def on_message(message):
                 "entryKey": target_player
             }
 
-            response = session.get(roblox_api_url, headers=roblox_headers, params=roblox_params, proxies={"http": None, "https": None})
+            response = session.get(roblox_api_url, headers=roblox_headers, params=roblox_params)
             
             if response.status_code == 200:
                 roblox_data = response.json()
