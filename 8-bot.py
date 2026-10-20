@@ -828,7 +828,7 @@ async def on_message(message):
             
             # 🌐 2. 判明した名前を使って、RobloxのOpen Cloud DataStore APIを見に行く
             # v1 Open Cloud DataStore の正しいエンドポイントURL構造に修正
-            roblox_api_url = f"https://apis.roblox.com/datastores/v1/universes/{UNIVERSE_ID}/standard-datastores/datastore/entries/entry"
+            roblox_api_url = f"https://apis.roblox.com/datastores/v1/universes/{UNIVERSE_ID}/standard-datastores/datastores/entries/entry"
             roblox_headers = {"x-api-key": ROBLOX_API_KEY}
             roblox_params = {
                 "datastoreName": DATASTORE_NAME, 
