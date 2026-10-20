@@ -769,14 +769,9 @@ async def on_message(message):
             await message.channel.send("❌ Bot側でBloxlinkのAPIキー（BLOXLINK_API_KEY）が設定されていません。")
             return
 
-        # 🌐 1. Bloxlink v4 API：URLの文字列結合バグを防ぐため、安全に組み立てる
+        # 🌐 1. Bloxlink v4 API：バグの起きない最も確実な文字列結合でURLを作成
         guild_id = message.guild.id if message.guild else 0
-        
-        # 💡 スラッシュの有無でURLが壊れないように安全に結合します
-        from urllib.parse import urljoin
-        base_url = "https://blox.link/v4/public/"
-        path = f"guilds/{guild_id}/discord-to-roblox/{user_id}"
-        bloxlink_url = urljoin(base_url, path)
+        bloxlink_url = "https://blox.link/v4/public/" + str(guild_id) + "/discord-to-roblox/" + str(user_id)
         
         try:
             import requests
