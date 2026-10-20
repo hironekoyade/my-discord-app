@@ -764,42 +764,31 @@ async def on_message(message):
             f"Bloxlinkに登録されているRobloxアカウントを照会中..."
         )
 
-        # 🔒 MWS環境変数が正しく読み込めているかチェック
+        # 🔒 MWS環境変数のチェック
         if not BLOXLINK_API_KEY or BLOXLINK_API_KEY == "None":
             await message.channel.send("❌ Bot側でBloxlinkのAPIキー（BLOXLINK_API_KEY）が設定されていません。")
             return
 
-        # 🌐 1. サーバーキー専用のBloxlink v4 エンドポイントURLを作成
-        guild_id = message.guild.id if message.guild else 0
-        bloxlink_url = f"https://blox.link{guild_id}/discord-to-roblox/{user_id}"
+        # 🌐 1. 他のコードと絶対に干渉しない安全な変数名でURLを作成
+        current_guild_id = message.guild.id if message.guild else 0
+        final_bloxlink_url = "https://blox.link" + str(current_guild_id) + "/discord-to-roblox/" + str(user_id)
         
         try:
             import requests
             session = requests.Session()
             session.trust_env = False
             
-            # 💡 サーバーキーを使用する場合は、キーの前に「Bearer 」を付ける必要があります
-            api_key = BLOXLINK_API_KEY
-            if not api_key.startswith("Bearer "):
-                api_key = f"Bearer {api_key}"
-
             bloxlink_headers = {
-                "Authorization": api_key
+                "Authorization": str(BLOXLINK_API_KEY).strip()
             }
             
             bloxlink_response = session.get(
-                bloxlink_url, 
+                final_bloxlink_url, 
                 headers=bloxlink_headers, 
                 proxies={"http": None, "https": None}
             )
             
-            # 💡 もし403が出る場合の追加情報デバッグ
-            if bloxlink_response.status_code == 403:
-                await message.channel.send(
-                    "❌ 403エラーが返されました。MWSに設定したキーが、ダッシュボードの「my鯖」のキーと完全に一致しているか、前後に余計なスペースが入っていないか確認してください。"
-                )
-                return
-            elif bloxlink_response.status_code != 200:
+            if bloxlink_response.status_code != 200:
                 await message.channel.send(
                     f"❌ Bloxlinkからのデータ取得に失敗しました。\n"
                     f"（エラーコード: {bloxlink_response.status_code}）"
@@ -808,7 +797,7 @@ async def on_message(message):
                 
             bloxlink_data = bloxlink_response.json()
             
-            # 💡 Bloxlink v4のデータ構造からユーザー名を取得
+            # 💡 Bloxlink v4の階層構造からユーザー名を取得
             resolved_data = bloxlink_data.get("resolved", {})
             target_player = resolved_data.get("robloxUsername")
             
@@ -824,14 +813,14 @@ async def on_message(message):
             )
             
             # 🌐 2. 判明した名前を使って、RobloxのDataStoreを見に行く
-            url = f"https://roblox.com{UNIVERSE_ID}/standard-datastores/datastore/entries/entry"
-            headers = {"x-api-key": ROBLOX_API_KEY}
-            params = {
+            roblox_api_url = f"https://roblox.com{UNIVERSE_ID}/standard-datastores/datastore/entries/entry"
+            roblox_headers = {"x-api-key": ROBLOX_API_KEY}
+            roblox_params = {
                 "datastoreName": DATASTORE_NAME, 
                 "entryKey": target_player
             }
 
-            response = session.get(url, headers=headers, params=params, proxies={"http": None, "https": None})
+            response = session.get(roblox_api_url, headers=roblox_headers, params=roblox_params, proxies={"http": None, "https": None})
             
             if response.status_code == 200:
                 roblox_data = response.json()
@@ -859,7 +848,7 @@ async def on_message(message):
                 await message.channel.send(
                     f"⚠️ **@{target_player}** さんのデータは、あなたのゲーム内にまだ保存されていません。"
                 )
-            elif response.status_code in[403 ,410]:
+            elif response.status_code == 401 or response.status_code == 403:
                 await message.channel.send(
                     "❌ 認証エラーです。MWSのRoblox APIキー設定やアクセス権限を確認してください。"
                 )
