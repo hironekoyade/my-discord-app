@@ -534,6 +534,7 @@ def update_db_score(
     message: discord.Message = None, 
     member: discord.Member = None
 ):
+    """正解時に全サーバーで役職自動昇進をチェックする関数"""
     try:
         response = (
             supabase.table("user_scores")
@@ -546,22 +547,27 @@ def update_db_score(
         correct = 1 if is_correct else 0
         wrong = 0 if is_correct else 1
         
-        # 💡 [0] を指定して1行ずつ正しく読み込みます
-        if response.data and len(response.data) > 0:
-            current = response.data[0] # 👈 ここ！
-            correct = current.get(
-                "correct_count", 0
-            ) + (1 if is_correct else 0)
-            
-            wrong = current.get(
-                "wrong_count", 0
-            ) + (0 if is_correct else 1)
-            
+        # 💡 [0] から過去のクイズ成績を引き継ぐ
+        user_data_list = getattr(response, "data", response)
+        if (
+            user_data_list 
+            and isinstance(user_data_list, list) 
+            and len(user_data_list) > 0
+        ):
+            current = user_data_list[0]
+            correct = (
+                current.get("correct_count", 0) 
+                + (1 if is_correct else 0)
+            )
+            wrong = (
+                current.get("wrong_count", 0) 
+                + (0 if is_correct else 1)
+            )
             user_rank_preference = current.get(
                 "is_rank_enabled", True
             )
 
-        # データをSupabaseへ保存（upsert）
+        # データをSupabaseへ保存
         supabase.table("user_scores").upsert({
             "user_id": user_id,
             "username": username,
@@ -571,15 +577,13 @@ def update_db_score(
             "updated_at": "now()"
         }).execute()
 
-        # 👑 役職昇進チェック
+        # 👑 【全サーバー対応】役職昇進チェック
         if is_correct and message and message.guild and member:
             if member.id == client.user.id:
                 return
 
-            server_enabled = is_rank_enabled_for_guild(
-                message.guild.id
-            )
-            if server_enabled and user_rank_preference:
+            # 💡 個人が役職付与を拒否していない（TRUE）場合のみ進む
+            if user_rank_preference:
                 async def assign_rank_role():
                     role_name = None
                     if correct >= 120:
@@ -587,13 +591,14 @@ def update_db_score(
                     elif correct >= 80:
                         role_name = "博士博士号"
                     elif correct >= 50:
-                        role_name = "物知り博士"
+                        role_name = "物知り博士"  # 👈 50問で付与！
                     elif correct >= 30:
                         role_name = "クイズ達人"
                     elif correct >= 10:
                         role_name = "見習い学者"
                     
                     if role_name:
+                        # 💡 今まさにクイズを解いたDiscordサーバーの役職一覧から探す
                         role = discord.utils.get(
                             message.guild.roles, 
                             name=role_name
