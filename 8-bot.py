@@ -764,14 +764,21 @@ async def on_message(message):
             f"Bloxlinkに登録されているRobloxアカウントを照会中..."
         )
 
-        bloxlink_url = f"https://blox.link/v1/user/{user_id}"
+        # 🔒 MWS環境変数が正しく読み込めているかチェック
+        if not BLOXLINK_API_KEY or BLOXLINK_API_KEY == "None":
+            await message.channel.send("❌ Bot側でBloxlinkのAPIキー（BLOXLINK_API_KEY）が設定されていません。")
+            return
+
+        # 🌐 1. Bloxlink v4 API：サーバーIDとユーザーIDを組み合わせてURLを作る
+        guild_id = message.guild.id if message.guild else 0
+        bloxlink_url = f"https://blox.link{guild_id}/discord-to-roblox/{user_id}"
         
         try:
             import requests
             session = requests.Session()
             session.trust_env = False
             
-            # 🛡️ 直書きせず、環境変数から読み込んだ変数名をそのままセットします！
+            # MWSから読み込んだ環境変数をヘッダーにセット
             bloxlink_headers = {
                 "Authorization": BLOXLINK_API_KEY
             }
@@ -790,7 +797,10 @@ async def on_message(message):
                 return
                 
             bloxlink_data = bloxlink_response.json()
-            target_player = bloxlink_data.get("robloxUsername")
+            
+            # 💡 【重要】Bloxlink v4のネスト（階層化）されたデータ構造からユーザー名を取得
+            resolved_data = bloxlink_data.get("resolved", {})
+            target_player = resolved_data.get("robloxUsername")
             
             if not target_player:
                 await message.channel.send(
@@ -803,7 +813,7 @@ async def on_message(message):
                 f"続けてRobloxのゲーム内データを読み込みます..."
             )
             
-            # 🌐 2. 判明した名前を使って、あなたのゲームのDataStoreを見に行く
+            # 🌐 2. 判明した名前を使って、RobloxのDataStoreを見に行く（URLの崩れを修正）
             url = f"https://roblox.com{UNIVERSE_ID}/standard-datastores/datastore/entries/entry"
             headers = {"x-api-key": ROBLOX_API_KEY}
             params = {
@@ -832,16 +842,16 @@ async def on_message(message):
                 )
                 embed.add_field(name="👑 現在のレベル", value=f"**Lv.{level}**", inline=True)
                 embed.add_field(name="🏆 獲得スコア", value=f"**{score} 点**", inline=True)
-                embed.set_footer(text=f"データストア名: {DATASTORE_NAME} | 認証: Bloxlink")
+                embed.set_footer(text=f"データストア名: {DATASTORE_NAME} | 認証: Bloxlink v4")
                 await message.channel.send(embed=embed)
                 
             elif response.status_code == 404:
                 await message.channel.send(
                     f"⚠️ **@{target_player}** さんのデータは、あなたのゲーム内にまだ保存されていません。"
                 )
-            elif response.status_code == 401 or response.status_code == 403:
+            elif response.status_code in[401 ,403]:
                 await message.channel.send(
-                    "❌ 認証エラーです。MWSのAPIキー設定やアクセス権限を確認してください。"
+                    "❌ 認証エラーです。MWSのRoblox APIキー設定やアクセス権限を確認してください。"
                 )
             else:
                 await message.channel.send(
