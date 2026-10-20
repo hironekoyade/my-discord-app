@@ -756,38 +756,40 @@ async def on_message(message):
             )
         return
 
-    # 💡 2. クイズ解答中の場合は他の一般「!」コマンドをスルー
-    if (
-        message.content.startswith("!") 
-        and message.content not in ["!ストップ", "!stop", "!cancel"]
-    ):
-        has_quiz = (
-            guild_id in server_current_quiz 
-            or guild_id in server_current_quiz_jh 
-            or guild_id in server_current_quiz_academic 
-            or user_id in user_status_dict
-        )
-        if not has_quiz:
-            pass 
-        else:
-            return  
-
     elif message.content.startswith("!roblox_score"):
-        args = message.content.split()
-        if len(args) < 2:
+        user_id = message.author.id
+        await message.channel.send(
+            f"🔍 {message.author.mention} さんのDiscord IDから、"
+            f"Bloxlinkに登録されているRobloxアカウントを照会中..."
+        )
+        
+        # 🔗 1. Bloxlinkの公式APIを使って、このDiscordユーザーのRobloxユーザー名を取得する
+        bloxlink_url = f"https://blox.link{user_id}"
+        bloxlink_response = requests.get(bloxlink_url)
+        
+        if bloxlink_response.status_code != 200:
             await message.channel.send(
-                "❌ ユーザー名を指定してください。\n"
-                "例: `!roblox_score PlayerA`"
+                f"❌ Bloxlinkからアカウント情報を取得できませんでした。\n"
+                f"先にBloxlink（ https://blox.link ）でアカウント連携を完了させてください。"
             )
             return
             
-        target_player = args[1]
+        bloxlink_data = bloxlink_response.json()
+        # APIの返り値からRobloxのユーザー名（Name）を抜き出す
+        target_player = bloxlink_data.get("robloxUsername")
+        
+        if not target_player:
+            await message.channel.send(
+                f"❌ あなたのDiscordアカウントに紐づくRobloxユーザー名が見つかりませんでした。"
+            )
+            return
+
         await message.channel.send(
-            f"🔍 Robloxから **{target_player}** "
-            f"さんのデータを照会中..."
+            f"🎯 連携アカウント **@{target_player}** さんを確認しました！\n"
+            f"続けてRobloxのゲーム内データを読み込みます..."
         )
         
-        # 🌐 1. 【完全修正版】Roblox Open Cloud の正しい1行URL
+        # 🌐 2. 判明した本人のユーザー名を使って、あなたのゲームのDataStoreを見に行く
         url = f"https://roblox.com{UNIVERSE_ID}/standard-datastores/datastore/entries/entry"
         headers = {"x-api-key": ROBLOX_API_KEY}
         params = {
@@ -796,63 +798,41 @@ async def on_message(message):
         }
 
         try:
-            import requests
-            response = requests.get(
-                url, headers=headers, params=params
-            )
+            response = requests.get(url, headers=headers, params=params)
             
             if response.status_code == 200:
                 roblox_data = response.json()
                 score = 0
                 level = 1
                 
-                # 💡 テーブル型(辞書)で保存されている場合
                 if isinstance(roblox_data, dict):
                     score = roblox_data.get("Score", 0)
                     level = roblox_data.get("Level", 1)
-                # 💡 数値や文字列だけで保存されている場合
                 else:
                     try: score = int(roblox_data)
                     except: score = roblox_data
                 
-                # 🎨 オシャレなカード（Embed）で出力！
                 embed = discord.Embed(
-                    title="🎮 Roblox ステータス連携 🎮",
-                    description=(
-                        f"**{target_player}** さんの"
-                        f"ゲーム内データを取得しました！"
-                    ),
-                    color=discord.Color.red()
+                    title="🎮 Roblox ステータス連携（本人確認済） 🎮",
+                    description=f"**@{target_player}** さんのゲーム内データです！",
+                    color=discord.Color.green()
                 )
-                embed.add_field(
-                    name="👑 現在のレベル", 
-                    value=f"**Lv.{level}**", 
-                    inline=True
-                )
-                embed.add_field(
-                    name="🏆 獲得スコア", 
-                    value=f"**{score} 点**", 
-                    inline=True
-                )
-                embed.set_footer(
-                    text=f"データストア名: {DATASTORE_NAME}"
-                )
+                embed.add_field(name="👑 現在のレベル", value=f"**Lv.{level}**", inline=True)
+                embed.add_field(name="🏆 獲得スコア", value=f"**{score} 点**", inline=True)
+                embed.set_footer(text=f"データストア名: {DATASTORE_NAME} | 認証: Bloxlink")
                 await message.channel.send(embed=embed)
                 
             elif response.status_code == 404:
                 await message.channel.send(
-                    f"⚠️ **{target_player}** さんのデータは"
-                    f"ゲーム内に見つかりませんでした。"
+                    f"⚠️ **@{target_player}** さんのデータは、あなたのゲーム内にまだ保存されていません。"
                 )
-            elif response.status_code in[401 ,403]:
+            elif response.status_code in[401, 403]:
                 await message.channel.send(
-                    "❌ 認証エラーです。MWSの"
-                    "APIキー設定やアクセス権限を確認してください。"
+                    "❌ 認証エラーです。MWSのAPIキー設定やアクセス権限を確認してください。"
                 )
             else:
                 await message.channel.send(
-                    f"❌ Roblox APIとの通信に失敗しました。\n"
-                    f"エラーコード: {response.status_code}"
+                    f"❌ Roblox APIとの通信に失敗しました。\nエラーコード: {response.status_code}"
                 )
         except Exception as e:
             print(f"Robloxデータ取得エラー: {e}")
