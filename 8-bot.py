@@ -771,7 +771,7 @@ async def on_message(message):
 
         current_guild_id = message.guild.id if message.guild else 0
         # v4用の正しいドメインとエンドポイントのパスに修正し、f文字列で綺麗に結合します
-        final_bloxlink_url = f"https://blox.link/{current_guild_id}/discord-to-roblox/{user_id}"
+        final_bloxlink_url = f"https://blox.link{current_guild_id}/discord-to-roblox/{user_id}"
 
         try:
             import requests
@@ -779,7 +779,7 @@ async def on_message(message):
             session.trust_env = False
             
             bloxlink_headers = {
-                "Authorization": str(BLOXLINK_API_KEY).strip()
+                "Authorization": f"Bearer {str(BLOXLINK_API_KEY).strip()}"
             }
             
             bloxlink_response = session.get(
@@ -797,23 +797,37 @@ async def on_message(message):
                 
             bloxlink_data = bloxlink_response.json()
             
-            # 💡 Bloxlink v4の階層構造からユーザー名を取得
-            resolved_data = bloxlink_data.get("resolved", {})
-            target_player = resolved_data.get("robloxUsername")
+            # 💡 Bloxlink v4の階層構造から正確にユーザー情報を取得
+            # 応答フォーマットに合わせて 'robloxId' や 'resolved' などのパースを適切に行います
+            roblox_user_id = bloxlink_data.get("robloxId")
             
-            if not target_player:
+            if not roblox_user_id:
                 await message.channel.send(
-                    f"❌ あなたのDiscordアカウントに紐づくRobloxユーザー名が見つかりませんでした。"
+                    f"❌ あなたのDiscordアカウントに紐づくRobloxユーザーが見つかりませんでした。"
                 )
                 return
 
+            # RobloxユーザーIDからユーザー名（Username）を取得する（DataStoreのEntryKey用）
+            user_info_url = f"https://roblox.com{roblox_user_id}"
+            user_info_response = session.get(user_info_url, proxies={"http": None, "https": None})
+            
+            if user_info_response.status_code == 200:
+                target_player = user_info_response.json().get("name")
+            else:
+                target_player = None
+
+            if not target_player:
+                await message.channel.send("❌ Robloxユーザー名の取得に失敗しました。")
+                return
+
             await message.channel.send(
-                f"🎯 連携アカウント **@{target_player}** さんを確認しました！\n"
+                f"🎯 連携アカウント **@{target_player}** (ID: {roblox_user_id}) さんを確認しました！\n"
                 f"続けてRobloxのゲーム内データを読み込みます..."
             )
             
-            # 🌐 2. 判明した名前を使って、RobloxのDataStoreを見に行く
-            roblox_api_url = f"https://roblox.com{UNIVERSE_ID}/standard-datastores/datastore/entries/entry"
+            # 🌐 2. 判明した名前を使って、RobloxのOpen Cloud DataStore APIを見に行く
+            # v1 Open Cloud DataStore の正しいエンドポイントURL構造に修正
+            roblox_api_url = f"https://roblox.com/{UNIVERSE_ID}/standard-datastores/datastore/entries/entry"
             roblox_headers = {"x-api-key": ROBLOX_API_KEY}
             roblox_params = {
                 "datastoreName": DATASTORE_NAME, 
