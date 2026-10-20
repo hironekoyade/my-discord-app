@@ -808,7 +808,7 @@ async def on_message(message):
                 return
 
             # RobloxユーザーIDからユーザー名（Username）を取得する（DataStoreのEntryKey用）
-            user_info_url = f"https://roblox.com{roblox_user_id}"
+            user_info_url = f"https://roblox.com/{roblox_user_id}"
             user_info_response = session.get(user_info_url, proxies={"http": None, "https": None})
             
             if user_info_response.status_code == 200:
