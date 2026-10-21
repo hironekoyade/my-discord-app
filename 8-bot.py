@@ -820,16 +820,10 @@ async def on_message(message):
                 f"続けてRobloxのゲーム内データを読み込みます..."
             )
             
-            # 🌐 2. 判明した名前を使って、RobloxのOpen Cloud DataStore APIを見に行く
-            # v1 Open Cloud DataStore の正しいエンドポイントURL構造に修正
-            roblox_api_url = f"https://apis.roblox.com/datastores/v1/universes/{UNIVERSE_ID}/standard-datastores/datastores/entries/entry"
+            roblox_api_url = f"https://apis.roblox.com/cloud/v2/universes/{UNIVERSE_ID}/data-stores/{DATASTORE_NAME}/entries/{target_player}"
             roblox_headers = {"x-api-key": ROBLOX_API_KEY}
-            roblox_params = {
-                "datastoreName": DATASTORE_NAME, 
-                "entryKey": target_player
-            }
 
-            response = session.get(roblox_api_url, headers=roblox_headers, params=roblox_params)
+            response = session.get(roblox_api_url, headers=roblox_headers)
             
             if response.status_code == 200:
                 roblox_data = response.json()
