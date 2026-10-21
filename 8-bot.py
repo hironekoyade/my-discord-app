@@ -1239,9 +1239,6 @@ async def on_message(message):
         
         try:
             response = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
-            
-            # 💡【大修正】string indices must be integers の原因を解決！
-            # 最新のSupabaseは response.data の中身を安全にリストとして扱います
             user_data_list = getattr(response, "data", response)
             
             if user_data_list and isinstance(user_data_list, list) and len(user_data_list) > 0:
@@ -1261,6 +1258,35 @@ async def on_message(message):
                     f"• 正答率: {rate:.1f} %\n"
                     f"• 役職の自動付与: **{status_text}**"
                 )
+
+                # 👑 【新機能】スコア確認時にも自動で役職をチェックして付与する
+                if is_enabled and message.guild and isinstance(message.author, discord.Member):
+                    role_name = None
+                    if correct >= 120:
+                        role_name = "永世博士"
+                    elif correct >= 80:
+                        role_name = "博士博士号"
+                    elif correct >= 50:
+                        role_name = "物知り博士"
+                    elif correct >= 30:
+                        role_name = "クイズ達人"
+                    elif correct >= 10:
+                        role_name = "見習い学者"
+                    
+                    if role_name:
+                        role = discord.utils.get(message.guild.roles, name=role_name)
+                        if role and (role not in message.author.roles):
+                            try:
+                                await message.author.add_roles(role)
+                                await message.channel.send(
+                                    f"🆙 **【後付ランクアップ！】** {message.author.mention} さんの過去の累計正解数（{correct}問）を確認したため、**【{role_name}】** を付与しました！ 🎉"
+                                )
+                            except discord.Forbidden:
+                                await message.channel.send(
+                                    f"⚠️ 権限エラー: Botの役職順位が低いため、**【{role_name}】** を自動付与できませんでした。サーバー設定からBotの役職を一番上に上げてください。"
+                                )
+                            except Exception as e:
+                                print(f"スコア確認時のロール付与失敗: {e}")
             else:
                 await message.channel.send(f"📊 {message.author.display_name} さんは、まだクイズに挑戦していません！")
         except Exception as e:
