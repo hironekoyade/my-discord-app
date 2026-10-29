@@ -6,7 +6,18 @@ import json
 import string
 import asyncio
 import requests
-from discord.ext import tasks  # 🌟 インポートはここに綺麗にまとめます
+from discord.ext import tasks
+# 💡 【追加】スラッシュコマンド用の道具（app_commands）をインポート
+from discord import app_commands  
+
+# （中身省略 ... インテンツなどの設定）
+intents = discord.Intents.default()
+intents.message_content = True
+
+# 💡 【重要】client の定義のすぐ下に、コマンドを管理する「ツリー」を新しく1行追加します！
+client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client) # 👈 これを追加！
+
 
 # ==========================================
 # 🎮 Roblox連携：セキュリティ対応設定
@@ -68,6 +79,7 @@ intents.message_content = True
 
 # 💡 もしこの下の1行が消えていたら、新しく書き足してください！
 client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client) # 👈 これを追加！
 
 # 💡 ここに下の2行を追加してください
 print(f"【デバッグ】読み込んだURL: {SUPABASE_URL}")
@@ -154,6 +166,10 @@ async def auto_announce_ranking():
                 
         except Exception as e:
             print(f"定期ランキング発表エラー: {e}")
+    
+    # 💡 【追加】作ったスラッシュコマンドをDiscordに反映（同期）させる超重要コード
+    await tree.sync()
+    print("【🤖システムログ】すべてのスラッシュコマンドの同期が完了しました！")
 
 # ==========================================
 # 📊 マルチサーバー対応：状態管理システム
@@ -493,6 +509,323 @@ class RouletteView(discord.ui.View):
         self.button.label = "❌ 時間切れ（無効）"
         self.stop()
 
+# ==========================================
+# 💬 スラッシュコマンド版：挨拶機能シリーズ（新設）
+# ==========================================
+# 💡 contexts を設定することで、DMや他サーバーからでもBotに挨拶できるようになります！
+@tree.command(name="こんにちは", description="ひろねこbotが元気よく挨拶します！")
+async def slash_hello(interaction: discord.Interaction):
+    await interaction.response.send_message(f"こんにちは、{interaction.user.mention}さん！今日も良い1日にしましょう！☀️")
+
+@tree.command(name="おはよう", description="ひろねこbotが朝の挨拶をします！")
+async def slash_morning(interaction: discord.Interaction):
+    await interaction.response.send_message(f"おはようございます、{interaction.user.mention}さん！体調はどうですか？乗っていきましょう！🌱")
+
+@tree.command(name="こんばんは", description="ひろねこbotが夜の挨拶をします！")
+async def slash_evening(interaction: discord.Interaction):
+    await interaction.response.send_message(f"こんばんは、{interaction.user.mention}さん！今日のクイズの調子はどうでしたか？✨")
+
+@tree.command(name="おやすみ", description="ひろねこbotが夜の挨拶をします！")
+async def slash_night(interaction: discord.Interaction):
+    await interaction.response.send_message(f"おやすみなさい、{interaction.user.mention}さん。ゆっくり休んで、また明日クイズに挑戦してね。💤")
+
+
+# ==========================================
+# 🤖 スラッシュコマンド版：/help-hironekobot（名前変更版）
+# ==========================================
+# 💡 name を元の「!」時代と同じユニークな名前にして、他Botとの重複を完全シャットアウト！
+@tree.command(name="help-hironekobot", description="ひろねこbotのすべてのスラッシュコマンドと使い方の一覧表を表示します。")
+async def slash_help(interaction: discord.Interaction):
+    quiz_menu_text = ""
+    for grade, subjects in quiz_junior_high_school.items():
+        quiz_menu_text += f"📂 **{grade}**\n"
+        for subject, ranges in subjects.items():
+            range_list = []
+            for r_name, c_dict in ranges.items():
+                c_names = "、".join(c_dict.keys()) if c_dict.keys() else "設定なし"
+                range_list.append(f"{r_name} ({c_names})")
+            range_info = "、".join(range_list) if range_list else "（未登録）"
+            quiz_menu_text += f" ┗ 🔹 **{subject}** ➔ 範囲: {range_info}\n"
+        quiz_menu_text += "\n"
+
+    embed = discord.Embed(
+        title="🤖 ひろねこbot 新・スラッシュコマンド一覧表",
+        description="スラッシュ（`/`）を入力するだけで、スマホからでも簡単に呼び出せるようになりました！",
+        color=discord.Color.blue()
+    )
+    embed.add_field(
+        name="📚 クイズ機能 `/クイズ`",
+        value=(
+            "メニューからモードを選択して出題します！\n"
+            "• `一般クイズ` : 誰でも解ける一般知識問題\n"
+            "• `学術クイズ` : ボタンで答える高度な専門クイズ\n"
+            "• `中学クイズメニュー` : 学年・教科・単元をチャットで選んで出題\n"
+            "• `中学クイズおまかせ` : 中学生の全範囲から完全ランダム出題"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="🎲 お楽しみエンタメ機能",
+        value=(
+            "• `/ルーレット` : 🎰 自由入力（項目をスペース区切り）や、`50 100` での数値範囲指定も対応！\n"
+            "• `/占い` : 🔮 今日の運勢・明日の運勢を1日1回限定で占います\n"
+            "• `/サイコロ` : 面の数と振る個数を自由に指定してサイコロを振る\n"
+            "• `/州えらび` : 世界の6大州からランダムに1つを自動選出\n"
+            "• `/こんにちは` / `/おはよう` / `/こんばんは` / `/おやすみ` : 各種挨拶"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="📊 個人成績・その他",
+        value=(
+            "• `!quiz_score` : 自分の現在のクイズ正解数や役職付与設定を確認（※チャット入力）\n"
+            "• `!myrank-toggle` : 自分のクイズ正解数による役職自動付与のオンオフ切り替え\n"
+            "• `!ランク条件` : クイズ役職の昇進条件を一覧で確認"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="🛠️ サーバー管理者向け機能",
+        value=(
+            "• `!server-rank-toggle` : このサーバー全体での役職自動付与の有効化/無効化\n"
+            "• `!add-quiz-channel` : クイズや一般コマンドの実行を許可する専用部屋をリストに追加\n"
+            "• `!remove-quiz-channel` : 登録した専用部屋をリストから解除\n"
+            "• `!supabase-table(quiz_score)` : 全員のクイズの成績を確認（開発者専用）\n"
+            "• `!github-repositories` : 開発用GitHubリポジトリのURLを確認（開発者専用）"
+        ),
+        inline=False
+    )
+    
+    embed.set_footer(text="スラッシュ（/）コマンドの入力ボックスを活用してね！")
+    await interaction.response.send_message(embed=embed)
+
+# ==========================================
+# 🔮 スラッシュコマンド版：/占い（新設）
+# ==========================================
+@tree.command(name="占い", description="今日または明日の運勢、ラッキーカラーやアイテムを占います！")
+@app_commands.describe(day="占いたい日を選択してください")
+@app_commands.choices(day=[
+    app_commands.Choice(name="今日の運勢", value="today"),
+    app_commands.Choice(name="明日の運勢", value="tomorrow")
+])
+async def slash_fortune(interaction: discord.Interaction, day: str):
+    await interaction.response.defer()
+    user_id = interaction.user.id
+    day_text = "今日" if day == "today" else "明日"
+    
+    import datetime
+    current_date_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime("%Y-%m-%d")
+
+    fortunes = ["🌟 超大吉", "✨ 大吉", "🎵 中吉", "😊 小吉", "🍀 吉", "💤 末吉", "☔ 凶", "✖大凶"]
+    colors = ["赤色", "青色", "黄色", "緑色", "ピンク", "紫色", "オレンジ色", "白色", "黒色", "ゴールド"]
+    items = ["お気に入りのペン", "クイズの参考書", "スマホ", "いつもと違う靴下", "マイボトル", "ハンカチ", "お菓子"]
+    
+    embed = discord.Embed(
+        title=f"🔮 ひろねこ占い（{day_text}の運勢）",
+        description=f"{interaction.user.mention} さんの{day_text}の運勢を占いました！",
+        color=discord.Color.purple()
+    )
+    embed.add_field(name="✨ 総合運", value=f"**{random.choice(fortunes)}**", inline=False)
+    embed.add_field(name="🎨 ラッキーカラー", value=random.choice(colors), inline=True)
+    embed.add_field(name="🎒 ラッキーアイテム", value=random.choice(items), inline=True)
+    embed.set_footer(text="占いは1日1回のお楽しみ！良い1日になりますように。")
+
+    try:
+        res = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
+        last_date = None
+        correct_count, wrong_count = 0, 0
+        is_rank_enabled = True
+
+        user_data_list = getattr(res, "data", res)
+        if user_data_list and isinstance(user_data_list, list) and len(user_data_list) > 0:
+            user_data = user_data_list[0]
+            correct_count = user_data.get("correct_count", 0)
+            wrong_count = user_data.get("wrong_count", 0)
+            is_rank_enabled = user_data.get("is_rank_enabled", True)
+            last_date = user_data.get("last_fortune_date") if day == "today" else user_data.get("last_tomorrow_fortune_date")
+
+        if last_date and (str(last_date) == current_date_str):
+            await interaction.followup.send(f"⚠️ {interaction.user.mention} さん、**{day_text}の運勢はすでに占われています！** また明日挑戦してね！")
+            return
+
+        update_data = {
+            "user_id": user_id, "username": interaction.user.display_name,
+            "correct_count": correct_count, "wrong_count": wrong_count,
+            "is_rank_enabled": is_rank_enabled, "updated_at": "now()"
+        }
+        if day == "today": update_data["last_fortune_date"] = current_date_str
+        else: update_data["last_tomorrow_fortune_date"] = current_date_str
+
+        supabase.table("user_scores").upsert(update_data).execute()
+        await interaction.followup.send(embed=embed)
+    except Exception as e:
+        print(f"占いエラー: {e}")
+        await interaction.followup.send("❌ データベースエラーが発生しました。")
+
+# ==========================================
+# 🗺️ スラッシュコマンド版：/州えらび（新設）
+# ==========================================
+@tree.command(name="州えらび", description="世界の6大州からランダムに1つを選出します。")
+async def slash_continent(interaction: discord.Interaction):
+    continents = ["アジア州", "ヨーロッパ州", "アフリカ州", "北アメリカ州", "南アメリカ州", "オセアニア州"]
+    chosen = random.choice(continents)
+    embed = discord.Embed(
+        title="🌍 ランダム州選出 🌍",
+        description=f"抽選の結果、選ばれたのは……\n\n🎯 **【 {chosen} 】** です！",
+        color=discord.Color.blue()
+    )
+    await interaction.response.send_message(embed=embed)
+
+# ==========================================
+# 🎲 スラッシュコマンド版：/サイコロ（新設）
+# ==========================================
+@tree.command(name="サイコロ", description="サイコロを振ります。面の数と振る個数を指定できます。")
+@app_commands.describe(max_value="サイコロの面の数（デフォルト: 6）", dice_count="振る個数（デフォルト: 1）")
+async def slash_dice(interaction: discord.Interaction, max_value: int = 6, dice_count: int = 1):
+    if max_value < 1 or dice_count < 1 or max_value > 1000000 or dice_count > 30:
+        await interaction.response.send_message("❌ 不正な値です。（面数: 最大1,000,000 / 個数: 最大30）", ephemeral=True)
+        return
+    results = [random.randint(1, max_value) for _ in range(dice_count)]
+    total = sum(results)
+    if dice_count == 1:
+        await interaction.response.send_message(f"🎲 1 〜 {max_value} のサイコロを振りました！ 出た目は **【 {total} 】** です！")
+    else:
+        details = " ＋ ".join([f"[{r}]" for r in results])
+        await interaction.response.send_message(f"🎲 1 〜 {max_value} のサイコロを **{dice_count} 個** 振りました！\n内訳: {details}\n合計は **【 {total} 】** です！")
+
+# ==========================================
+# 🎖️ スラッシュコマンド版：/クイズ（新設）
+# ==========================================
+@tree.command(name="クイズ", description="各種クイズに挑戦します。")
+@app_commands.describe(mode="クイズの形式を選択してください")
+@app_commands.choices(mode=[
+    app_commands.Choice(name="一般クイズ", value="general"),
+    app_commands.Choice(name="学術クイズ", value="academic"),
+    app_commands.Choice(name="中学クイズメニュー", value="junior_high"),
+    app_commands.Choice(name="中学クイズおまかせ", value="junior_high_random")
+])
+async def slash_quiz(interaction: discord.Interaction, mode: str):
+    global server_current_quiz, server_current_quiz_jh, server_current_quiz_academic, user_status_dict
+    guild_id = interaction.guild.id if interaction.guild else 0
+    user_id = interaction.user.id
+
+    # チャンネル制限の確認
+    if interaction.guild:
+        target_ids = server_settings.get(str(guild_id), {}).get("quiz_channel_ids", [])
+        if target_ids and (interaction.channel_id not in target_ids):
+            await interaction.response.send_message("❌ このチャンネルでのクイズの実行は許可されていません。", ephemeral=True)
+            return
+
+    # 重複プレイ確認
+    if (guild_id in server_current_quiz) or (guild_id in server_current_quiz_jh) or (guild_id in server_current_quiz_academic) or (user_status_dict.get(user_id) in ["quiz_active", "academic_quiz_active"]):
+        await interaction.response.send_message("⚠️ 現在クイズが出題中、または選択処理中です。解答するか `!ストップ` してください。", ephemeral=True)
+        return
+
+    await interaction.response.defer()
+
+    if mode == "general":
+        chosen_quiz = random.choice(list(quiz_dictionary.keys()))
+        server_current_quiz[guild_id] = chosen_quiz
+        await interaction.followup.send(f"【一般知識クイズ】を出します！\n\n**問題：{chosen_quiz}**")
+
+    elif mode == "academic":
+        all_academic_q = []
+        for cat, qs in quiz_academic.items():
+            for q_t, q_d in qs.items():
+                all_academic_q.append({"text": q_t, "data": q_d, "category": cat})
+        chosen = random.choice(all_academic_q)
+        q_text, q_data = chosen["text"], chosen["data"]
+        
+        if q_data["type"] == "choice":
+            view = AcademicQuizView(q_data["answer"], q_data["explanation"], q_data["options"])
+            await interaction.followup.send(f"🎯 **【クイズ - {chosen['category']}】**（4択ボタン形式）\n\n**問題：{q_text}**", view=view)
+        elif q_data["type"] == "multi_choice":
+            view = MultiChoiceQuizView(q_data["answer"], q_data["explanation"], q_data["options"])
+            await interaction.followup.send(f"🔥 **【特別クイズ - {chosen['category']}】**（5択・2つ選択形式）\n\n**問題：{q_text}**\n\n⚠️ **【ルール】ボタンを【2つ】押してください！**", view=view)
+
+    elif mode == "junior_high":
+        user_status_dict[user_id] = "select_grade"
+        g_text = "・".join(quiz_junior_high_school.keys())
+        await interaction.followup.send(f"**何年生のクイズにしますか？ チャット欄に入力して選んでね！**\n{g_text} の中から選んでください。")
+
+    elif mode == "junior_high_random":
+        all_questions = []
+        for gd, sbs in quiz_junior_high_school.items():
+            for sb, rgs in sbs.items():
+                for rg, cts in rgs.items():
+                    for ct, qs in cts.items():
+                        for q_t, q_d in qs.items():
+                            all_questions.append({"text": q_t, "data": q_d, "info": f"【{gd}➔{sb}➔{rg}➔{ct}】"})
+        chosen = random.choice(all_questions)
+        server_current_quiz_jh[guild_id] = chosen["data"]
+        user_status_dict[user_id] = "quiz_active"
+        await interaction.followup.send(f"🎲 すべての範囲からランダムに出題します！\n💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**")
+# ==========================================
+# 🎰 スラッシュコマンド版：/ルーレット（新設）
+# ==========================================
+# 💡 ユーザーが打ち込む入力ボックス（オプション）をプログラム側で定義します
+@tree.command(name="ルーレット", description="ボタン式の本格演出ルーレットを開始します！")
+@app_commands.describe(
+    items="【自由入力】項目をスペースで区切って入力（例: 焼肉 寿司 ラーメン）",
+    max_num="【数値指定】1から指定した数字まで（例: 100 と打つと 1〜100 の抽選）",
+    min_num="【範囲指定オプション】下限の数字を指定したい時（例: 50 と入力）"
+)
+async def slash_roulette(
+    interaction: discord.Interaction, 
+    items: str = None, 
+    max_num: int = None, 
+    min_num: int = None
+):
+    # 💡 スラッシュコマンドでは interaction.response.defer() で「考え中...」にして制限時間を引き延ばします
+    await interaction.response.defer()
+    
+    options = []
+    mode_text = ""
+
+    # 1. 範囲指定モード（min_num と max_num が両方入力された場合）
+    if min_num is not None and max_num is not None:
+        if min_num >= max_num:
+            await interaction.followup.send("❌ 下限値は上限値より小さい数字を入力してください。（例: 下限50 / 上限100）", ephemeral=True)
+            return
+        options = [str(i) for i in range(min_num, max_num + 1)]
+        mode_text = f"⚙️ **範囲連番モード（{min_num} 〜 {max_num}）**"
+
+    # 2. 数値指定モード（上限 max_num だけが入力された場合）
+    elif max_num is not None:
+        if max_num < 2:
+            await interaction.followup.send("❌ 2以上の数値を指定してください。", ephemeral=True)
+            return
+        # 下限が未指定なら自動的に1からスタート
+        start_val = min_num if min_num is not None else 1
+        options = [str(i) for i in range(start_val, max_num + 1)]
+        mode_text = f"🔢 **数値指定モード（{start_val} 〜 {max_num}）**"
+
+    # 3. 自由入力モード（文字が入力された場合）
+    elif items is not None:
+        options = items.split()
+        mode_text = "💬 **自由入力モード**"
+
+    # 4. 何も入力されなかった場合
+    else:
+        await interaction.followup.send("❌ 引数が足りません。「項目」「上限」のいずれかを入力してください。", ephemeral=True)
+        return
+
+    # 既存の RouletteView をそのまま使い回します！
+    view = RouletteView(options)
+    
+    # 画面が詰まるのを防ぐ15個制限対策
+    display_options = options[:15]
+    footer_text = ", ".join([f"「{o}」" for o in display_options])
+    if len(options) > 15:
+        footer_text += f" ...他 {len(options) - 15} 個"
+
+    # 💡 スラッシュコマンド（defer後）は send ではなく followup.send を使います
+    await interaction.followup.send(
+        f"🎲 **ルーレットがセットされました！**（{mode_text}）\n"
+        f"📋 **候補：** {footer_text}\n"
+        f"準備ができたら、下のボタンを押してスタートしてね！👇", 
+        view=view
+    )
 # ==========================================
 # 🔑 管理者認証用の入力フォーム（モーダル画面）
 # ==========================================
@@ -1487,38 +1820,6 @@ async def on_message(message):
             details = " ＋ ".join([f"[{r}]" for r in results])
             await message.channel.send(f"🎲 1 〜 {max_value} のサイコロを **{dice_count} 個** 振りました！\n内訳: {details}\n合計は **【 {total} 】** です！")
             return  # 👈 頭に半角スペースを4つ足して、他の行と縦のラインを綺麗に揃えます！
-
-    # ==========================================
-    # 🎰 【ここを追加・修正！】ルーレット機能コマンドの本体
-    # ==========================================
-    if message.content.startswith("!ルーレット"):
-        args = message.content.split()
-        
-        # 1. 引数がない場合（使い方の説明）
-        if len(args) == 1:
-            await message.channel.send(
-                "❌ 項目を指定してください！\n"
-                "• 自由入力： `!ルーレット 焼肉 寿司 ラーメン` （スペース区切り）\n"
-                "• 数値指定： `!ルーレット 100` （1〜100から自動抽選）"
-            )
-            return
-
-        options = []
-        # 2. 数値指定の場合（例: !ルーレット 100）
-        if len(args) == 2 and args[1].isdigit():
-            max_num = int(args[1])
-            if max_num < 2:
-                await message.channel.send("❌ 2以上の数値を指定してください。")
-                return
-            options = [str(i) for i in range(1, max_num + 1)]
-        # 3. スペース区切りで項目が並んでいる場合
-        else:
-            options = args[1:]
-
-        # すでに実装されているボタン式ルーレットのViewを呼び出す
-        view = RouletteView(options)
-        await message.channel.send("🎰 ボタンを押すとルーレットの抽選が始まります！", view=view)
-        return
 
     # ==========================================
     # 🌍 【ここを追加！】世界の6大州をランダムに選ぶ機能
