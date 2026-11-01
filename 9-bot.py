@@ -777,7 +777,7 @@ async def slash_dice(interaction: discord.Interaction, max_value: int = 6, dice_
         await interaction.response.send_message(f"🎲 1 〜 {max_value} のサイコロを **{dice_count} 個** 振りました！\n内訳: {details}\n合計は **【 {total} 】** です！")
 
 # ==========================================
-# 🎖️ スラッシュコマンド版：/クイズ（新設）
+# 🎖️ スラッシュコマンド版：/クイズ
 # ==========================================
 @tree.command(name="クイズ", description="各種クイズに挑戦します。")
 @app_commands.describe(mode="クイズの形式を選択してください")
@@ -792,61 +792,59 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
     guild_id = interaction.guild.id if interaction.guild else 0
     user_id = interaction.user.id
 
-    # チャンネル制限の確認
+    # 1. チャンネル制限の確認
     if interaction.guild:
         target_ids = server_settings.get(str(guild_id), {}).get("quiz_channel_ids", [])
         if target_ids and (interaction.channel_id not in target_ids):
             await interaction.response.send_message("❌ このチャンネルでのクイズの実行は許可されていません。", ephemeral=True)
             return
 
-    # 重複プレイ確認
+    # 2. 重複プレイ確認
     if (guild_id in server_current_quiz) or (guild_id in server_current_quiz_jh) or (guild_id in server_current_quiz_academic) or (user_status_dict.get(user_id) in ["quiz_active", "academic_quiz_active"]):
         await interaction.response.send_message("⚠️ 現在クイズが出題中、または選択処理中です。解答するか `!ストップ` してください。", ephemeral=True)
         return
 
+    # 💡 3秒ルール回避のため、何よりも先に最速でdeferを実行してDiscordに応答を返します
     await interaction.response.defer()
 
+    # 🟢 A. 一般クイズモード
     if mode == "general":
+        if not quiz_dictionary:
+            await interaction.followup.send("一般クイズのデータが空、または読み込めていません。")
+            return
+
         chosen_quiz = random.choice(list(quiz_dictionary.keys()))
-        quiz_data = quiz_dictionary[chosen_quiz] # 💡問題のデータを取得
+        quiz_data = quiz_dictionary[chosen_quiz]
         server_current_quiz[guild_id] = chosen_quiz
         
-        # 🎨 テキストからオシャレなEmbed（カード形式）に変更
         embed = discord.Embed(
             title="【一般知識クイズ】",
             description=f"**問題：{chosen_quiz}**",
             color=discord.Color.blue()
         )
-        
-        # 🖼️ もしデータに「image_url」があれば画像を設定する
-        if quiz_data.get("image_url"):
+        if isinstance(quiz_data, dict) and quiz_data.get("image_url"):
             embed.set_image(url=quiz_data["image_url"])
             
         await interaction.followup.send(embed=embed)
 
+    # 🔵 B. 学術クイズモード（重複を除去・ランダム一発抽出で爆速化版）
     elif mode == "academic":
-        all_academic_q = []
-        for cat, qs in quiz_academic.items():
-            for q_t, q_d in qs.items():
-                all_academic_q.append({"text": q_t, "data": q_d, "category": cat})
-        chosen = random.choice(all_academic_q)
-        q_text, q_data = chosen["text"], chosen["data"]
-        
-    elif mode == "academic":
-        # 💡 毎回全ループを回すのをやめ、ランダムに直接ジャンルと問題を選びます
         if not quiz_academic:
             await interaction.followup.send("学術クイズのデータが空、または読み込めていません。")
             return
 
-        # 1. ランダムにジャンル（カテゴリ）を1つ選ぶ
+        # 重いループを回さず、直接ランダムに1つのカテゴリを選択
         chosen_category = random.choice(list(quiz_academic.keys()))
         category_quizzes = quiz_academic[chosen_category]
 
-        # 2. そのジャンルの中からランダムに問題を1つ選ぶ
+        # そのカテゴリの中から直接ランダムに1問を選択
         q_text = random.choice(list(category_quizzes.keys()))
         q_data = category_quizzes[q_text]
         
-        # ーーー 以降は画像（Embed）対応の出力処理 ーーー
+        # 解答判定用に現在の問題データを退避
+        server_current_quiz_academic[guild_id] = q_data
+        user_status_dict[user_id] = "academic_quiz_active"
+
         if q_data["type"] == "choice":
             view = AcademicQuizView(q_data["answer"], q_data["explanation"], q_data["options"])
             
@@ -872,8 +870,25 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
                 embed.set_image(url=q_data["image_url"])
                 
             await interaction.followup.send(embed=embed, view=view)
-    
+
+    # 🟡 C. 中学クイズメニュー選択モード
+    elif mode == "junior_high":
+        user_status_dict[user_id] = "select_grade"
+        grades = list(quiz_junior_high_school.keys())
+        grades_text = "・".join(grades)
+        
+        await interaction.followup.send(
+            f"📚 **中学クイズメニューを開きました。**\n"
+            f"**どの学年の問題に挑戦しますか？**\n"
+            f"チャット欄に「{grades_text}」のいずれかを直接入力して送信してください！"
+        )
+
+    # 🟠 D. 中学クイズおまかせモード（重複を除去・画像Embed完全対応版）
     elif mode == "junior_high_random":
+        if not quiz_junior_high_school:
+            await interaction.followup.send("中学クイズのデータが空、または読み込めていません。")
+            return
+
         all_questions = []
         for gd, sbs in quiz_junior_high_school.items():
             for sb, rgs in sbs.items():
@@ -885,21 +900,23 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
                                 "data": q_d, 
                                 "info": f"【{gd} ➔ {sb} ➔ {rg} ➔ {ct}】"
                             })
+                            
+        if not all_questions:
+            await interaction.followup.send("登録されている中学クイズの問題が見つかりません。")
+            return
+
         chosen = random.choice(all_questions)
         q_data = chosen["data"]
         
-        # 💡 サーバーごとの現在の問題データ（画像URL等を含む全体）を保持するように変更
+        # サーバーごとの現在の問題データ全体を保持（回答判定の不具合を解消）
         server_current_quiz_jh[guild_id] = q_data 
         user_status_dict[user_id] = "quiz_active"
         
-        # 🎨 テキストからオシャレなEmbedに変更
         embed = discord.Embed(
             title="🎲 中学クイズおまかせ出題",
             description=f"💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**",
             color=discord.Color.orange()
         )
-        
-        # 🖼️ JSONに「image_url」があれば画像を設定する
         if q_data.get("image_url"):
             embed.set_image(url=q_data["image_url"])
             
