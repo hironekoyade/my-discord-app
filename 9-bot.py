@@ -435,6 +435,89 @@ class MultiChoiceQuizView(discord.ui.View):
 
         self.stop()
 
+# ==========================================
+# 🧠 5択の中から【3つ】選ばせるシステム（新機能）
+# ==========================================
+class TripleChoiceQuizButton(discord.ui.Button):
+    def __init__(self, label, view_obj, style):
+        super().__init__(label=label, style=style)
+        self.view_obj = view_obj
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        await self.view_obj.process_choice(interaction, self)
+
+
+class TripleChoiceQuizView(discord.ui.View):
+    def __init__(self, correct_answers, explanation, options):
+        super().__init__(timeout=60.0)
+        self.correct_answers = correct_answers  # 正解のリスト（3つ）
+        self.explanation = explanation
+        self.selected_buttons = []              # 選択されたボタンを記憶
+        
+        shuffled_options = options.copy()
+        random.shuffle(shuffled_options)
+        
+        # 初期状態はすべてグレー（secondary）で5つのボタンを作成
+        for opt in shuffled_options:
+            btn = TripleChoiceQuizButton(label=opt, view_obj=self, style=discord.ButtonStyle.secondary)
+            self.add_item(btn)
+
+    async def process_choice(self, interaction: discord.Interaction, button: TripleChoiceQuizButton):
+        # 既に3つ選ばれて処理中の場合は何もしない
+        if len(self.selected_buttons) >= 3 and button not in self.selected_buttons:
+            return
+
+        # 🔄 トグル処理（選択・解除の切り替え）
+        if button in self.selected_buttons:
+            self.selected_buttons.remove(button)
+            button.style = discord.ButtonStyle.secondary
+        else:
+            self.selected_buttons.append(button)
+            button.style = discord.ButtonStyle.primary
+
+        # 💡 【選択数が3つ未満のとき】は画面の色だけ更新して次の入力を待つ
+        if len(self.selected_buttons) < 3:
+            await interaction.edit_original_response(view=self)
+            return
+
+        # 🚨 【3つのボタンが揃ったら】正誤判定（ロック）
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+                if item.label in self.correct_answers:
+                    item.style = discord.ButtonStyle.success
+                elif item in self.selected_buttons:
+                    item.style = discord.ButtonStyle.danger
+
+        await interaction.edit_original_response(view=self)
+
+        user_id = interaction.user.id
+        user_choices = [btn.label for btn in self.selected_buttons]
+
+        # 💡 3つの正解がすべて含まれているかをチェック（順不同）
+        is_all_correct = all(ans in user_choices for ans in self.correct_answers)
+
+        if is_all_correct:
+            update_db_score(user_id, interaction.user.display_name, True, interaction.message, member=interaction.user)
+            await interaction.channel.send(f"💡 {interaction.user.mention} **大正解！3つの選択肢を完璧に見抜きました！！🎉✨**")
+            await interaction.channel.send(f'<:hint:1556661937356546069> 【解説】\n{self.explanation}')
+        else:
+            update_db_score(user_id, interaction.user.display_name, False, interaction.message, member=interaction.user)
+            correct_text = " と ".join([f"【{a}】" for a in self.correct_answers])
+            await interaction.channel.send(f"😢 {interaction.user.mention} **残念、不正解です...。**\n正解は {correct_text} でした！")
+        
+        # 💡 解答待ち状態クリア（マルチサーバー対応版）
+        global server_current_quiz, server_current_quiz_jh, server_current_quiz_academic, user_status_dict
+        g_id = interaction.guild.id if interaction.guild else 0
+        u_id = interaction.user.id
+        if g_id in server_current_quiz: del server_current_quiz[g_id]
+        if g_id in server_current_quiz_jh: del server_current_quiz_jh[g_id]
+        if g_id in server_current_quiz_academic: del server_current_quiz_academic[g_id]
+        if u_id in user_status_dict: del user_status_dict[u_id]
+
+        self.stop()
+
 class MultiChoiceQuizButton(discord.ui.Button):
     def __init__(self, label, view_obj, style):
         super().__init__(label=label, style=style)
@@ -725,8 +808,21 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
 
     if mode == "general":
         chosen_quiz = random.choice(list(quiz_dictionary.keys()))
+        quiz_data = quiz_dictionary[chosen_quiz] # 💡問題のデータを取得
         server_current_quiz[guild_id] = chosen_quiz
-        await interaction.followup.send(f"【一般知識クイズ】を出します！\n\n**問題：{chosen_quiz}**")
+        
+        # 🎨 テキストからオシャレなEmbed（カード形式）に変更
+        embed = discord.Embed(
+            title="【一般知識クイズ】",
+            description=f"**問題：{chosen_quiz}**",
+            color=discord.Color.blue()
+        )
+        
+        # 🖼️ もしデータに「image_url」があれば画像を設定する
+        if quiz_data.get("image_url"):
+            embed.set_image(url=quiz_data["image_url"])
+            
+        await interaction.followup.send(embed=embed)
 
     elif mode == "academic":
         all_academic_q = []
@@ -736,17 +832,78 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
         chosen = random.choice(all_academic_q)
         q_text, q_data = chosen["text"], chosen["data"]
         
+    elif mode == "academic":
+        # 💡 毎回全ループを回すのをやめ、ランダムに直接ジャンルと問題を選びます
+        if not quiz_academic:
+            await interaction.followup.send("学術クイズのデータが空、または読み込めていません。")
+            return
+
+        # 1. ランダムにジャンル（カテゴリ）を1つ選ぶ
+        chosen_category = random.choice(list(quiz_academic.keys()))
+        category_quizzes = quiz_academic[chosen_category]
+
+        # 2. そのジャンルの中からランダムに問題を1つ選ぶ
+        q_text = random.choice(list(category_quizzes.keys()))
+        q_data = category_quizzes[q_text]
+        
+        # ーーー 以降は画像（Embed）対応の出力処理 ーーー
         if q_data["type"] == "choice":
             view = AcademicQuizView(q_data["answer"], q_data["explanation"], q_data["options"])
-            await interaction.followup.send(f"🎯 **【クイズ - {chosen['category']}】**（4択ボタン形式）\n\n**問題：{q_text}**", view=view)
+            
+            embed = discord.Embed(
+                title=f"🎯 【クイズ - {chosen_category}】（4択ボタン形式）",
+                description=f"**問題：{q_text}**",
+                color=discord.Color.green()
+            )
+            if q_data.get("image_url"): 
+                embed.set_image(url=q_data["image_url"])
+                
+            await interaction.followup.send(embed=embed, view=view)
+            
         elif q_data["type"] == "multi_choice":
             view = MultiChoiceQuizView(q_data["answer"], q_data["explanation"], q_data["options"])
-            await interaction.followup.send(f"🔥 **【特別クイズ - {chosen['category']}】**（5択・2つ選択形式）\n\n**問題：{q_text}**\n\n⚠️ **【ルール】ボタンを【2つ】押してください！**", view=view)
-
-    elif mode == "junior_high":
-        user_status_dict[user_id] = "select_grade"
-        g_text = "・".join(quiz_junior_high_school.keys())
-        await interaction.followup.send(f"**何年生のクイズにしますか？ チャット欄に入力して選んでね！**\n{g_text} の中から選んでください。")
+            
+            embed = discord.Embed(
+                title=f"🔥 【特別クイズ - {chosen_category}】（5択・2つ選択形式）",
+                description=f"**問題：{q_text}**\n\n⚠️ **【ルール】ボタンを【2つ】押してください！**",
+                color=discord.Color.red()
+            )
+            if q_data.get("image_url"): 
+                embed.set_image(url=q_data["image_url"])
+                
+            await interaction.followup.send(embed=embed, view=view)
+    
+    elif mode == "junior_high_random":
+        all_questions = []
+        for gd, sbs in quiz_junior_high_school.items():
+            for sb, rgs in sbs.items():
+                for rg, cts in rgs.items():
+                    for ct, qs in cts.items():
+                        for q_t, q_d in qs.items():
+                            all_questions.append({
+                                "text": q_t, 
+                                "data": q_d, 
+                                "info": f"【{gd} ➔ {sb} ➔ {rg} ➔ {ct}】"
+                            })
+        chosen = random.choice(all_questions)
+        q_data = chosen["data"]
+        
+        # 💡 サーバーごとの現在の問題データ（画像URL等を含む全体）を保持するように変更
+        server_current_quiz_jh[guild_id] = q_data 
+        user_status_dict[user_id] = "quiz_active"
+        
+        # 🎨 テキストからオシャレなEmbedに変更
+        embed = discord.Embed(
+            title="🎲 中学クイズおまかせ出題",
+            description=f"💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**",
+            color=discord.Color.orange()
+        )
+        
+        # 🖼️ JSONに「image_url」があれば画像を設定する
+        if q_data.get("image_url"):
+            embed.set_image(url=q_data["image_url"])
+            
+        await interaction.followup.send(embed=embed)
 
     elif mode == "junior_high_random":
         all_questions = []
@@ -757,9 +914,20 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
                         for q_t, q_d in qs.items():
                             all_questions.append({"text": q_t, "data": q_d, "info": f"【{gd}➔{sb}➔{rg}➔{ct}】"})
         chosen = random.choice(all_questions)
-        server_current_quiz_jh[guild_id] = chosen["data"]
+        q_data = chosen["data"]
+        server_current_quiz_jh[guild_id] = q_data
         user_status_dict[user_id] = "quiz_active"
-        await interaction.followup.send(f"🎲 すべての範囲からランダムに出題します！\n💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**")
+        
+        # 🎨 Embed化
+        embed = discord.Embed(
+            title="🎲 中学クイズおまかせ出題",
+            description=f"💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**",
+            color=discord.Color.orange()
+        )
+        if q_data.get("image_url"): # 🖼️ 画像チェック
+            embed.set_image(url=q_data["image_url"])
+            
+        await interaction.followup.send(embed=embed)
 # ==========================================
 # 🎰 スラッシュコマンド版：/ルーレット（新設）
 # ==========================================
@@ -1222,20 +1390,20 @@ async def on_message(message):
             if message.channel.id not in target_channel_ids:
                 return 
 
-    # ==========================================
-    # 🎯 クイズの解答判定エリア
-    # ==========================================
-
-    # 1. 一般知識クイズの解答判定
-    if guild_id in server_current_quiz:
-        quiz_key = server_current_quiz[guild_id]
-        quiz_data = quiz_dictionary[quiz_key]
+    # 中学クイズの判定処理部分
+    if guild_id in server_current_quiz_jh and server_current_quiz_jh[guild_id] is not None:
+        # 💡 保存したデータから正解（answer）や解説（explanation）を取得
+        current_quiz_data = server_current_quiz_jh[guild_id]
+        correct_answer = current_quiz_data["answer"]
+        explanation = current_quiz_data.get("explanation", "解説はありません。")
+        
+        # ユーザーの回答が正解（リスト、または文字列）に含まれているか判定
         is_correct = False
-        if isinstance(quiz_data["answer"], list):
-            if message.content in quiz_data["answer"]:
+        if isinstance(correct_answer, list):
+            if message.content in correct_answer:
                 is_correct = True
         else:
-            if message.content == quiz_data["answer"]:
+            if message.content == correct_answer:
                 is_correct = True
 
         if is_correct:
@@ -1518,55 +1686,6 @@ async def on_message(message):
             )
             return
 
-    if message.content == "!中学クイズ":
-        user_status_dict[user_id] = "select_grade"
-        g_text = "・".join(
-            quiz_junior_high_school.keys()
-        )
-        await message.channel.send(
-            f"**何年生のクイズにしますか？**\n"
-            f"{g_text} の中から選んでください。"
-        )
-        return
-
-    if message.content == "!中学クイズおまかせ":
-        all_questions = []
-        for gd, sbs in quiz_junior_high_school.items():
-            for sb, rgs in sbs.items():
-                for rg, cts in rgs.items():
-                    for ct, qs in cts.items():
-                        for q_t, q_d in qs.items():
-                            all_questions.append({
-                                "text": q_t,
-                                "data": q_d,
-                                "info": f"【{gd}➔{sb}➔{rg}➔{ct}】"
-                            })
-        if not all_questions:
-            await message.channel.send(
-                "❌ クイズが1問も登録されていません。"
-            )
-            return
-        chosen = random.choice(all_questions)
-        server_current_quiz_jh[guild_id] = chosen["data"]
-        user_status_dict[user_id] = "quiz_active"  
-        await message.channel.send(
-            f"🎲 すべての範囲からランダムに出題します！\n"
-            f"💡 出題範囲：{chosen['info']}\n\n"
-            f"**問題：{chosen['text']}**"
-        )
-        return
-
-    if message.content == "!一般クイズ":
-        await message.channel.send(
-            "【一般知識クイズ】を出します！"
-        )
-        chosen_quiz = random.choice(
-            list(quiz_dictionary.keys())
-        )
-        server_current_quiz[guild_id] = chosen_quiz
-        await message.channel.send(chosen_quiz)
-        return
-
     if message.content == "!quiz_score":
         user_id = message.author.id
         
@@ -1627,72 +1746,7 @@ async def on_message(message):
             print(f"Supabase読み込みエラー: {e}")
         return
     
-    # 📋 6. ヘルプ機能
-    if message.content == "!help-hironekobot":
-        quiz_menu_text = ""
-        for grade, subjects in quiz_junior_high_school.items():
-            quiz_menu_text += f"📂 **{grade}**\n"
-            for subject, ranges in subjects.items():
-                range_list = []
-                for r_name, c_dict in ranges.items():
-                    c_names = "、".join(c_dict.keys()) if c_dict.keys() else "設定なし"
-                    range_list.append(f"{r_name} ({c_names})")
-                range_info = "、".join(range_list) if range_list else "（未登録）"
-                quiz_menu_text += f" ┗ 🔹 **{subject}** ➔ 範囲: {range_info}\n"
-            quiz_menu_text += "\n"
 
-        embed = discord.Embed(
-            title="🤖 クイズボット コマンド・プログラム一覧表",
-            description="試験勉強やクイズを楽しむためのコマンド一覧です！",
-            color=discord.Color.blue()
-        )
-        embed.add_field(
-            name="📚 クイズメニュー",
-            value=f"• `!中学クイズ` : メニューを選んで出題\n• `!中学クイズおまかせ` : 全範囲から完全ランダム出題\n• `!学術クイズ` : 高度な専門クイズに挑戦！\n\n【現在登録されているメニュー】\n{quiz_menu_text}",
-            inline=False
-        )
-        embed.add_field(
-            name="🛑 クイズを途中でやめたいとき",
-            value="• `!ストップ` / `!stop` / `!cancel` (いつでもリセット可能)",
-            inline=False
-        )
-        embed.add_field(
-            name="🎲 その他の機能",
-            value=(
-                "• `!一般クイズ` : 一般知識クイズに挑戦\n"
-                "• `!今日の運勢` / `!明日の運勢` : 🔮 **【1日1回限定】** 今日の運勢・明日の運勢を占う!\n"  # 💡 ここを分かりやすく書き換えました！
-                "• `!サイコロ` : サイコロを振る（例: `!サイコロ 100` / `!サイコロ 6 5`）\n"
-                "• `!ルーレット` : 🎰 **【大人気】ボタン式の本格演出ルーレット！**\n"
-                "  ┗ 💬 自由入力： `!ルーレット 焼肉 寿司 ラーメン` （項目をスペース区切り）\n"
-                "  ┗ 🔢 数値指定： `!ルーレット 100` （1〜100からランダムに自動抽選）\n"
-                "• `!ランダムに州を選んで` : 世界の6大州をランダムに選択\n"
-                "• `!こんにちは` / `!おはよう` / `!こんばんは` / `!おやすみ`\n"
-                "• `!quiz_score` : クイズのスコアを表示！\n"
-                "• `!myrank-toggle` : 自分のクイズ正解数による役職付与を有効化/無効化\n"
-                "• `!ランク条件` : 何問クイズ正解でどのロールがもらえるかを確認！\n"
-            ),
-            inline=False
-        )
-        embed.add_field(
-            name="🛠️ 管理者向け機能(実行は管理専用サーバーでしてください)",
-            value=("• `!github-repositories` : 開発用GitHubリポジトリのURLを確認する\n"
-                   "• `!supabase-table(quiz_score)` : 全員のクイズの成績・今日の占い/明日の占いを実行したかを確認する\n"
-                   "• `!server-rank-toggle` : サーバーのクイズ正解数による役職付与を有効化/無効化\n"
-                   "• `!add-quiz-channel` : クイズ用サーバーを選択(このコマンドの実行は選択したいサーバーで行ってください)\n"
-                   "• `!remove-quiz-channel` : クイズ用サーバーを削除(このコマンドの実行は選択したいサーバーで行ってください)\n"
-            ),
-            inline=False
-        )
-        embed.add_field(
-            name="🫆 運営向けパスワード機能(実行は運営サーバーでしてください)",
-            value=("• `!password-reset` : botのパスワード変更(あまりに強力なので私にしか権限付与してません)\n"
-            ),
-            inline=False
-        )
-        
-        embed.set_footer(text="大文字・小文字の打ち間違いに注意してね！")
-        await message.channel.send(embed=embed)
-        return
 
     # 🛠️ 管理者専用：GitHubリポジトリ確認コマンド
     if message.content == "!github-repositories":
