@@ -43,11 +43,6 @@ print(
     f"{ROBLOX_API_KEY[:5] if ROBLOX_API_KEY else 'None'}..."
 )
 
-# ==========================================
-# 🔑 管理者パスワード管理（複合システム版）
-# ==========================================
-ADMIN_PASSWORD = str(random.randint(1000, 9999))
-
 # 👑 絶対に変わらない「元の3人（創設者）」の固定IDリスト
 ORIGINAL_ADMINS = [
     1385634725460316273,
@@ -95,19 +90,25 @@ async def auto_reset_password():
     ADMIN_PASSWORD = "".join(random.choices(characters, k=6))
     print(f"【🔑定期リセット】24時間が経過したため、パスワードを自動変更しました: {ADMIN_PASSWORD}")
 
-# Botが起動したときに、上のタイマーをスタートさせる
 @client.event
 async def on_ready():
     print(f"ログインしました: {client.user}")
-    print(f"【🔑システムログ】初期パスワードは: {ADMIN_PASSWORD}")
     
     # ⏱️ タイマーがまだ動いていなければ、ここで起動する
     if not auto_reset_password.is_running():
         auto_reset_password.start()
         
-    # 📊 【追加】ランキング自動発表タイマーを起動
+    # 📊 ランキング自動発表タイマーを起動
     if not auto_announce_ranking.is_running():
         auto_announce_ranking.start()
+
+    # 👑 【安全な場所へ移動】起動時に1回だけコマンドを同期する
+    try:
+        await tree.sync()
+        print("【🤖システムログ】すべてのスラッシュコマンドの同期が完了しました！")
+    except Exception as e:
+        print(f"コマンド同期エラー: {e}")
+
 # ==========================================
 # 📊 定期ランキング自動発表システム（新機能）
 # ==========================================
@@ -166,10 +167,6 @@ async def auto_announce_ranking():
                 
         except Exception as e:
             print(f"定期ランキング発表エラー: {e}")
-    
-    # 💡 【追加】作ったスラッシュコマンドをDiscordに反映（同期）させる超重要コード
-    await tree.sync()
-    print("【🤖システムログ】すべてのスラッシュコマンドの同期が完了しました！")
 
 # ==========================================
 # 📊 マルチサーバー対応：状態管理システム
