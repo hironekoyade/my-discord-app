@@ -672,9 +672,19 @@ async def slash_help(interaction: discord.Interaction):
             "• `!remove-quiz-channel` : 登録した専用部屋をリストから解除\n"
             "• `!supabase-table(quiz_score)` : 全員のクイズの成績を確認（開発者専用）\n"
             "• `!github-repositories` : 開発用GitHubリポジトリのURLを確認（開発者専用）"
+            "• `!admin` : 管理者になるためのコードを入力して管理者になる"
         ),
         inline=False
     )
+    embed.add_field(
+            name="📊 運営専用機能",
+            value=(
+                "• `!quiz_score` : 自分の現在のクイズ正解数や役職付与設定を確認（※チャット入力）\n"
+                "• `!myrank-toggle` : 自分のクイズ正解数による役職自動付与のオンオフ切り替え\n"
+                "• `!ランク条件` : クイズ役職の昇進条件を一覧で確認"
+            ),
+            inline=False
+        )
     
     embed.set_footer(text="スラッシュ（/）コマンドの入力ボックスを活用してね！")
     await interaction.response.send_message(embed=embed)
@@ -1198,6 +1208,32 @@ async def on_message(message):
             await message.channel.send(
                 "❌ エラー：この緊急コマンドはBotの【創設者3人】のみが実行できます。"
             )
+        return
+        # 👑 特定のユーザーを管理者リストから削除するコマンド
+    if message.content.startswith("!admin-remove"):
+        if message.author.id in ORIGINAL_ADMINS:
+            args = message.content.split()
+            if len(args) < 2:
+                await message.channel.send("❌ 使用方法: `!admin-remove [ユーザーID]`")
+                return
+                
+            try:
+                target_id = int(args[1])
+                
+                # 創設者自身を削除しようとした場合はブロック
+                if target_id in ORIGINAL_ADMINS:
+                    await message.channel.send("❌ 創設者（元の3人）を管理者リストから削除することはできません。")
+                    return
+                    
+                if target_id in ADMIN_USER_ID:
+                    ADMIN_USER_ID.remove(target_id)
+                    await message.channel.send(f"👑 ユーザーID: `{target_id}` を管理者リストから削除しました。")
+                else:
+                    await message.channel.send("⚠️ そのユーザーは管理者リストに登録されていません。")
+            except ValueError:
+                await message.channel.send("❌ ユーザーIDは正しい数字で入力してください。")
+        else:
+            await message.channel.send("❌ エラー：このコマンドはBotの【創設者3人】のみが実行できます。")
         return
 
     # 🛠️ 専用チャンネルの「追加」コマンド

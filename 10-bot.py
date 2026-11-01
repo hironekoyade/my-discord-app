@@ -445,27 +445,27 @@ class RouletteView(discord.ui.View):
 # ==========================================
 # 💬 スラッシュコマンド版：挨拶＆エンタメ
 # ==========================================
-@tree.command(name="/こんにちは", description="ひろねこbotが元気よく挨拶します！")
+@tree.command(name="こんにちは", description="ひろねこbotが元気よく挨拶します！")
 async def slash_hello(interaction: discord.Interaction):
     await interaction.response.send_message(f"こんにちは、{interaction.user.mention}さん！今日も良い1日にしましょう！☀️")
 
-@tree.command(name="/おはよう", description="ひろねこbotが朝の挨拶をします！")
+@tree.command(name="おはよう", description="ひろねこbotが朝の挨拶をします！")
 async def slash_morning(interaction: discord.Interaction):
     await interaction.response.send_message(f"おはようございます、{interaction.user.mention}さん！体調はどうですか？乗っていきましょう！🌱")
 
-@tree.command(name="/こんばんは", description="ひろねこbotが夕方の挨拶をします！")
+@tree.command(name="こんばんは", description="ひろねこbotが夕方の挨拶をします！")
 async def slash_evening(interaction: discord.Interaction):
     await interaction.response.send_message(f"こんばんは、{interaction.user.mention}さん！今日のクイズの調子はどうでしたか？✨")
 
-@tree.command(name="/おやすみ", description="ひろねこbotが夜の挨拶をします！")
+@tree.command(name="おやすみ", description="ひろねこbotが夜の挨拶をします！")
 async def slash_night(interaction: discord.Interaction):
     await interaction.response.send_message(f"おやすみなさい、{interaction.user.mention}さん。ゆっくり休んで、また明日クイズに挑戦してね。💤")
 
-@tree.command(name="/運営申請", description="ひろねこbotの「運営スタッフ」への昇格申請フォームを開きます。")
+@tree.command(name="運営申請", description="ひろねこbotの「運営スタッフ」への昇格申請フォームを開きます。")
 async def slash_apply(interaction: discord.Interaction):
     await interaction.response.send_modal(StaffApplyModal())
 
-@tree.command(name="/help-hironekobot", description="ひろねこbotのすべてのスラッシュコマンドと使い方の一覧表を表示します。")
+@tree.command(name="help-hironekobot", description="ひろねこbotのすべてのスラッシュコマンドと使い方の一覧表を表示します。")
 async def slash_help(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🤖 ひろねこbot 新・スラッシュコマンド一覧表",
@@ -587,7 +587,7 @@ async def slash_dice(interaction: discord.Interaction, max_value: int = 6, dice_
 # ==========================================
 # 🎖️ スラッシュコマンド版：/クイズ（完全統合版）
 # ==========================================
-@tree.command(name="/クイズ", description="各種クイズに挑戦します。")
+@tree.command(name="クイズ", description="各種クイズに挑戦します。")
 @app_commands.describe(mode="クイズの形式を選択してください")
 @app_commands.choices(mode=[
     app_commands.Choice(name="一般クイズ", value="general"),
@@ -693,7 +693,7 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
         if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
         await interaction.followup.send(embed=embed)
 
-@tree.command(name="/ルーレット", description="ボタン式の本格演出ルーレットを開始します！")
+@tree.command(name="ルーレット", description="ボタン式の本格演出ルーレットを開始します！")
 @app_commands.describe(
     items="【自由入力】項目をスペースで区切って入力",
     max_num="【数値指定】1から指定した数字まで",
