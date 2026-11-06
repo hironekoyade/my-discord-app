@@ -73,7 +73,6 @@ async def auto_reset_password():
 @client.event
 async def on_ready():
     print(f"ログインしました: {client.user}")
-    print(f"【🔑システムログ】初期パスワードは: {ADMIN_PASSWORD}")
     
     if not auto_reset_password.is_running():
         auto_reset_password.start()
