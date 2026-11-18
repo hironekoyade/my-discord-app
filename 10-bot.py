@@ -221,7 +221,7 @@ class AcademicQuizView(discord.ui.View):
         is_correct = (chosen_label == self.correct_answer)
 
         if is_correct:
-            update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
+            update_db_score_async(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
             await interaction.channel.send(f"💡 {interaction.user.mention} **正解！お見事です（学術クイズ）！🎉**")
             await interaction.channel.send(f'<:hint:1556661937356546069> 【解説】\n{self.explanation}')
         else:
@@ -298,6 +298,11 @@ class MultiChoiceQuizView(discord.ui.View):
         user_id = interaction.user.id
         user_choices = [btn.label for btn in self.selected_buttons]
         is_all_correct = all(ans in user_choices for ans in self.correct_answers)
+
+        def update_db_score_async(user_id: int, username: str, is_correct: bool, message: discord.Message = None, member: discord.Member = None):
+            asyncio.create_task(
+        asyncio.to_thread(update_db_score, user_id, username, is_correct, message, member)
+    )
 
         if is_all_correct:
             update_db_score(user_id, interaction.user.display_name, True, interaction.message, member=interaction.user)
@@ -752,6 +757,11 @@ async def slash_roulette(interaction: discord.Interaction, items: str = None, ma
 
     await interaction.followup.send(f"🎲 **ルーレットがセットされました！**（{mode_text}）\n📋 **候補：** {footer_text}\n準備ができたら、下のボタンを押してスタートしてね！👇", view=view)
 
+def update_db_score_async(user_id: int, username: str, is_correct: bool, message: discord.Message = None, member: discord.Member = None):
+    asyncio.create_task(
+        asyncio.to_thread(update_db_score, user_id, username, is_correct, message, member)
+    )
+
 def update_db_score(user_id: int, username: str, is_correct: bool, message: discord.Message = None, member: discord.Member = None):
     try:
         response = supabase.table("user_scores").select("*").eq("user_id", user_id).execute()
@@ -944,7 +954,10 @@ async def on_message(message):
             if message.content in correct_answer: is_correct = True
         else:
             if message.content == correct_answer: is_correct = True
-
+        def update_db_score_async(user_id: int, username: str, is_correct: bool, message: discord.Message = None, member: discord.Member = None):
+            asyncio.create_task(
+        asyncio.to_thread(update_db_score, user_id, username, is_correct, message, member)
+        )
         if is_correct:
             update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
             await message.channel.send(
