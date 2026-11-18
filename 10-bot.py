@@ -681,16 +681,38 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
             return
         chosen = random.choice(all_questions)
         q_data = chosen["data"]
+        q_type = q_data.get("type", "text")
         server_current_quiz_jh[guild_id] = q_data 
         user_status_dict[user_id] = "quiz_active"
         
-        embed = discord.Embed(
-            title="🎲 中学クイズおまかせ出題",
-            description=f"💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**",
-            color=discord.Color.orange()
-        )
-        if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
-        await interaction.followup.send(embed=embed)
+        if q_type == "choice":
+            view = AcademicQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"])
+            embed = discord.Embed(
+                title="🎲 中学クイズおまかせ出題（選択式）",
+                description=f"💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**",
+                color=discord.Color.orange()
+            )
+            if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
+            await interaction.followup.send(embed=embed, view=view)
+
+        elif q_type in ["multi_choice", "double_choice"]:
+            view = MultiChoiceQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"])
+            embed = discord.Embed(
+                title="🎲 中学クイズおまかせ出題（2つ選択式）",
+                description=f"💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**\n\n⚠️ **【ルール】ボタンを【2つ】押してください！**",
+                color=discord.Color.orange()
+            )
+            if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
+            await interaction.followup.send(embed=embed, view=view)
+
+        else:
+            embed = discord.Embed(
+                title="🎲 中学クイズおまかせ出題",
+                description=f"💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**",
+                color=discord.Color.orange()
+            )
+            if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
+            await interaction.followup.send(embed=embed)
 
 @tree.command(name="ルーレット", description="ボタン式の本格演出ルーレットを開始します！")
 @app_commands.describe(
@@ -912,6 +934,8 @@ async def on_message(message):
     # 2. 中学クイズのチャット解答判定
     elif (user_status_dict.get(user_id) == "quiz_active" and guild_id in server_current_quiz_jh):
         quiz_data = server_current_quiz_jh[guild_id]
+        if quiz_data.get("type", "text") != "text":
+            return
         correct_answer = quiz_data["answer"]
         is_correct = False
         if isinstance(correct_answer, list):
@@ -1003,12 +1027,39 @@ async def on_message(message):
                 return
                 
             q_text = random.choice(list(questions.keys()))
-            server_current_quiz_jh[guild_id] = questions[q_text]
+            q_data = questions[q_text]
+            q_type = q_data.get("type", "text")
+            server_current_quiz_jh[guild_id] = q_data
             user_status_dict[user_id] = "quiz_active"
-            await message.channel.send(f"🎯 出題範囲：{s_grade} ➔ {s_subject} ➔ {s_range} ➔ {content_name}\n\n**問題：{q_text}**")
-        else:
-            await message.channel.send("⚠️ 正しい単元を入力してください。")
-        return
+
+            if q_type == "choice":
+                view = AcademicQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"])
+                embed = discord.Embed(
+                    title="📚 中学クイズ（選択式）",
+                    description=f"🎯 出題範囲：{s_grade} ➔ {s_subject} ➔ {s_range} ➔ {content_name}\n\n**問題：{q_text}**",
+                    color=discord.Color.orange()
+                )
+                if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
+                await message.channel.send(embed=embed, view=view)
+
+            elif q_type in ["multi_choice", "double_choice"]:
+                view = MultiChoiceQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"])
+                embed = discord.Embed(
+                    title="📚 中学クイズ（2つ選択式）",
+                    description=f"🎯 出題範囲：{s_grade} ➔ {s_subject} ➔ {s_range} ➔ {content_name}\n\n**問題：{q_text}**\n\n⚠️ **【ルール】ボタンを【2つ】押してください！**",
+                    color=discord.Color.orange()
+                )
+                if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
+                await message.channel.send(embed=embed, view=view)
+
+            else:
+                embed = discord.Embed(
+                    title="📚 中学クイズ",
+                    description=f"🎯 出題範囲：{s_grade} ➔ {s_subject} ➔ {s_range} ➔ {content_name}\n\n**問題：{q_text}**",
+                    color=discord.Color.orange()
+                )
+                if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
+                await message.channel.send(embed=embed)
 
     # 個人成績確認
     if message.content == "!quiz_score":
