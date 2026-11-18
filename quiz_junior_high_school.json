@@ -44,7 +44,14 @@
             "座標": {
                 "座標平面": {
                     "点aの座標を答えなさい。\nア (5, 6)\nイ (6, 5)\nウ (5, 5)\nエ (6, 6)": {
-                        "answer": "ア",
+                        "type": "choice",
+                        "options": [
+                                    "ア (5, 6)",
+                                    "イ (6, 5)",
+                                    "ウ (5, 5)",
+                                    "エ (6, 6)"
+                                    ],
+                        "answer": "ア (5, 6)",
                         "explanation": "原点Oから右（x軸の正の方向）に5、上（y軸の正の方向）に6進んだ位置にあるため、(5, 6) となります。",
                         "hint": "座標は (x座標, y座標) の順番で読み取ります。横の目盛りを先に読みましょう。",
                         "image_url": "https://cdn.discordapp.com/attachments/1571814528281485363/1571814575656013854/NB_M_1_091_sas_001_00_question.png?ex=6afc19e5&is=6afac865&hm=93bd844906254cdddba5c7d61ad7e8af03dedb1309ab6caccd3bf84b7814cb1a&"

@@ -929,8 +929,10 @@ async def on_message(message):
             await message.channel.send("不正解です。<:oh_no:1556661209116184686> もう一度挑戦してみてください！")
             await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data.get("hint", "ヒントはありません。")}')
         del server_current_quiz[guild_id]
+        
+        if guild_id in server_current_quiz:
+            del server_current_quiz[guild_id]
         return
-
     # 2. 中学クイズのチャット解答判定
     elif (user_status_dict.get(user_id) == "quiz_active" and guild_id in server_current_quiz_jh):
         quiz_data = server_current_quiz_jh[guild_id]
@@ -945,16 +947,26 @@ async def on_message(message):
 
         if is_correct:
             update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
-            await message.channel.send("<a:marugame:1556977377601527920> ⭕ 正解！お見事です！ 🎉")
-            await message.channel.send(f'💡 【解説】 \n{quiz_data["explanation"]}')
+            await message.channel.send(
+                f"<a:marugame:1556977377601527920> ⭕ 正解！お見事です！ 🎉\n"
+                f"💡 【解説】 \n{quiz_data['explanation']}"
+            )
         else:
             update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
-            await message.channel.send(" 不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！")
-            await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】 \n{quiz_data["hint"]}')
-        del server_current_quiz_jh[guild_id]
-        if user_id in user_status_dict: del user_status_dict[user_id]
-        return
+            await message.channel.send(
+                f"不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！\n"
+                f"<:hint:1556661937356546069> 【ヒント】 \n{quiz_data['hint']}"
+            )
+        # 修正前：
+        # del server_current_quiz_jh[guild_id]
+        # if user_id in user_status_dict: del user_status_dict[user_id]
 
+        # 修正後（安全装置付き）：
+        if guild_id in server_current_quiz_jh:
+            del server_current_quiz_jh[guild_id]
+        if user_id in user_status_dict:
+            del user_status_dict[user_id]
+        return
     # 🛑 中断コマンド
     if message.content in ["!ストップ", "!stop", "!cancel"]:
         if guild_id in server_current_quiz: del server_current_quiz[guild_id]
