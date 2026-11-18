@@ -632,6 +632,7 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
         if isinstance(quiz_data, dict) and quiz_data.get("image_url"):
             embed.set_image(url=quiz_data["image_url"])
         await interaction.followup.send(embed=embed)
+        if isinstance(quiz_data, dict) and quiz_data.get("id"): embed.set_footer(text=f"問題ID: {quiz_data['id']}")
 
     elif mode == "academic":
         if not quiz_academic:
@@ -654,6 +655,7 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
             )
             if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
             await interaction.followup.send(embed=embed, view=view)
+            if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
         elif q_data["type"] == "multi_choice":
             view = MultiChoiceQuizView(q_data["answer"], q_data["explanation"], q_data["options"])
             embed = discord.Embed(
@@ -662,6 +664,7 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
                 color=discord.Color.red()
             )
             if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
+            if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
             await interaction.followup.send(embed=embed, view=view)
 
     elif mode == "junior_high":
@@ -689,6 +692,7 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
         q_type = q_data.get("type", "text")
         server_current_quiz_jh[guild_id] = q_data 
         user_status_dict[user_id] = "quiz_active"
+        if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
         
         if q_type == "choice":
             view = AcademicQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"])
@@ -698,6 +702,7 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
                 color=discord.Color.orange()
             )
             if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
+            if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
             await interaction.followup.send(embed=embed, view=view)
 
         elif q_type in ["multi_choice", "double_choice"]:
@@ -708,6 +713,7 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
                 color=discord.Color.orange()
             )
             if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
+            if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
             await interaction.followup.send(embed=embed, view=view)
 
         else:
@@ -1066,7 +1072,6 @@ async def on_message(message):
                 )
                 if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
                 await message.channel.send(embed=embed, view=view)
-
             elif q_type in ["multi_choice", "double_choice"]:
                 view = MultiChoiceQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"])
                 embed = discord.Embed(
@@ -1074,7 +1079,9 @@ async def on_message(message):
                     description=f"🎯 出題範囲：{s_grade} ➔ {s_subject} ➔ {s_range} ➔ {content_name}\n\n**問題：{q_text}**\n\n⚠️ **【ルール】ボタンを【2つ】押してください！**",
                     color=discord.Color.orange()
                 )
-                if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
+                if q_data.get("image_url"):
+                    embed.set_image(url=q_data["image_url"])
+                if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
                 await message.channel.send(embed=embed, view=view)
 
             else:
