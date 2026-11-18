@@ -692,7 +692,6 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
         q_type = q_data.get("type", "text")
         server_current_quiz_jh[guild_id] = q_data 
         user_status_dict[user_id] = "quiz_active"
-        if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
         
         if q_type == "choice":
             view = AcademicQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"])
@@ -723,6 +722,7 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
                 color=discord.Color.orange()
             )
             if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
+            if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
             await interaction.followup.send(embed=embed)
 
 @tree.command(name="ルーレット", description="ボタン式の本格演出ルーレットを開始します！")
