@@ -5,7 +5,6 @@ import sympy as sp
 import json
 import string
 import asyncio
-import requests
 from discord.ext import tasks
 from discord import app_commands  
 from pathlib import Path
@@ -69,6 +68,14 @@ async def auto_reset_password():
     ADMIN_PASSWORD = "".join(random.choices(characters, k=6))
     print(f"【🔑定期リセット】24時間が経過したため、パスワードを自動変更しました: {ADMIN_PASSWORD}")
 
+# ▼ 全スラッシュコマンド共通のエラー処理（タイムアウト時のエラーログ防止）
+@tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+    if isinstance(error, discord.app_commands.CommandInvokeError) and isinstance(error.original, discord.NotFound):
+        # サーバー遅延による3秒タイムアウト（10062）は静かに無視する
+        return
+    # それ以外の本当のバグは今まで通りログに出す
+    raise error
 # Botが起動したとき
 @client.event
 async def on_ready():
