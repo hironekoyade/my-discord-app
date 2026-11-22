@@ -1083,6 +1083,7 @@ async def on_message(message):
                     color=discord.Color.orange()
                 )
                 if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
+                if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
                 await message.channel.send(embed=embed, view=view)
             elif q_type in ["multi_choice", "double_choice"]:
                 view = MultiChoiceQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"])
@@ -1103,6 +1104,7 @@ async def on_message(message):
                     color=discord.Color.orange()
                 )
                 if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
+                if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
                 await message.channel.send(embed=embed)
 
     # 個人成績確認
