@@ -194,10 +194,12 @@ class AcademicQuizButton(discord.ui.Button):
 
 
 class AcademicQuizView(discord.ui.View):
-    def __init__(self, correct_answer, explanation, options):
+    def __init__(self, correct_answer, explanation, options, quiz_name="学術クイズ"):
         super().__init__(timeout=60.0) 
         self.correct_answer = correct_answer
         self.explanation = explanation
+        self.quiz_name = quiz_name
+        
         
         shuffled_options = options.copy()
         random.shuffle(shuffled_options)
@@ -224,9 +226,11 @@ class AcademicQuizView(discord.ui.View):
         is_correct = (chosen_label == self.correct_answer)
 
         if is_correct:
+            await interaction.channel.send(
+                f"💡 {interaction.user.mention} **正解！お見事です（{self.quiz_name}）！🎉**\n"
+                f"<:hint:1556661937356546069> 【解説】\n{self.explanation}"
+            )
             update_db_score_async(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
-            await interaction.channel.send(f"💡 {interaction.user.mention} **正解！お見事です（学術クイズ）！🎉**")
-            await interaction.channel.send(f'<:hint:1556661937356546069> 【解説】\n{self.explanation}')
         else:
             update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
             await interaction.channel.send(f"😢 {interaction.user.mention} **不正解です...。もう一度挑戦してみてください！**")
@@ -706,7 +710,7 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
         user_status_dict[user_id] = "quiz_active"
         
         if q_type == "choice":
-            view = AcademicQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"])
+            view = AcademicQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"], "中学クイズ")
             embed = discord.Embed(
                 title="🎲 中学クイズおまかせ出題（選択式）",
                 description=f"💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**",
@@ -1076,7 +1080,7 @@ async def on_message(message):
             user_status_dict[user_id] = "quiz_active"
 
             if q_type == "choice":
-                view = AcademicQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"])
+                view = AcademicQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"], "中学クイズ")
                 embed = discord.Embed(
                     title="📚 中学クイズ（選択式）",
                     description=f"🎯 出題範囲：{s_grade} ➔ {s_subject} ➔ {s_range} ➔ {content_name}\n\n**問題：{q_text}**",
