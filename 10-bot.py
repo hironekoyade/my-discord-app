@@ -584,7 +584,7 @@ async def slash_help(interaction: discord.Interaction, password: str = None):
 
     # パスワード認証で開いた場合は、他の人に見えないよう ephemeral=True で送信する
     await interaction.response.send_message(embed=embed, ephemeral=is_secret_unlocked)
-    
+
 @tree.command(name="占い", description="今日または明日の運勢、ラッキーカラーやアイテムを占います！")
 @app_commands.describe(day="占いたい日を選択してください")
 @app_commands.choices(day=[
@@ -935,35 +935,37 @@ async def on_message(message):
     # 📋 運営・サーバー管理者の一覧表示コマンド（運営以上が実行可能）
     if message.content == "!admin-list":
         if user_id in ADMIN_USER_ID:
+            # ユーザー名を取得するヘルパー処理（キャッシュになければ直接APIから取得）
+            async def format_user_lines(id_list):
+                lines = []
+                for uid in id_list:
+                    u = client.get_user(uid)
+                    if u is None:
+                        try:
+                            u = await client.fetch_user(uid)
+                        except Exception:
+                            u = None
+                    name = u.display_name if u else "不明なユーザー"
+                    lines.append(f"• {name} (`{uid}`)")
+                return "\n".join(lines) if lines else "なし"
+
             embed = discord.Embed(
                 title="👑 ひろねこbot 権限保持者一覧",
                 color=discord.Color.gold()
             )
             
             # 創設者リスト
-            creator_lines = []
-            for uid in ORIGINAL_ADMINS:
-                u = client.get_user(uid)
-                name = u.display_name if u else "不明なユーザー"
-                creator_lines.append(f"• {name} (`{uid}`)")
-            embed.add_field(name="👑 創設者（最高権限）", value="\n".join(creator_lines) or "なし", inline=False)
+            creator_text = await format_user_lines(ORIGINAL_ADMINS)
+            embed.add_field(name="👑 創設者（最高権限）", value=creator_text, inline=False)
 
             # 運営リスト（創設者を除く）
             staff_ids = [uid for uid in ADMIN_USER_ID if uid not in ORIGINAL_ADMINS]
-            staff_lines = []
-            for uid in staff_ids:
-                u = client.get_user(uid)
-                name = u.display_name if u else "不明なユーザー"
-                staff_lines.append(f"• {name} (`{uid}`)")
-            embed.add_field(name="🛡️ Bot運営スタッフ", value="\n".join(staff_lines) or "なし", inline=False)
+            staff_text = await format_user_lines(staff_ids)
+            embed.add_field(name="🛡️ Bot運営スタッフ", value=staff_text, inline=False)
 
             # 認証済みサーバー管理者リスト
-            s_admin_lines = []
-            for uid in AUTHENTICATED_SERVER_ADMINS:
-                u = client.get_user(uid)
-                name = u.display_name if u else "不明なユーザー"
-                s_admin_lines.append(f"• {name} (`{uid}`)")
-            embed.add_field(name="🔑 認証済みサーバー管理者", value="\n".join(s_admin_lines) or "なし", inline=False)
+            s_admin_text = await format_user_lines(AUTHENTICATED_SERVER_ADMINS)
+            embed.add_field(name="🔑 認証済みサーバー管理者", value=s_admin_text, inline=False)
 
             await message.channel.send(embed=embed)
         else:
