@@ -979,35 +979,42 @@ async def on_message(message):
             return
         correct_answer = quiz_data["answer"]
         is_correct = False
+        user_ans = message.content.strip()
+
         if isinstance(correct_answer, list):
-            if message.content in correct_answer: is_correct = True
+            for ans in correct_answer:
+                if ans.startswith("STARTSWITH:"):
+                    prefix = ans.replace("STARTSWITH:", "").lower()
+                    if user_ans.lower().startswith(prefix) and len(user_ans) > len(prefix):
+                        is_correct = True
+                        break
+                elif user_ans.lower() == ans.strip().lower():
+                    is_correct = True
+                    break
         else:
-            if message.content == correct_answer: is_correct = True
-        def update_db_score_async(user_id: int, username: str, is_correct: bool, message: discord.Message = None, member: discord.Member = None):
-            asyncio.create_task(
-        asyncio.to_thread(update_db_score, user_id, username, is_correct, message, member)
-        )
+            if correct_answer.startswith("STARTSWITH:"):
+                prefix = correct_answer.replace("STARTSWITH:", "").lower()
+                if user_ans.lower().startswith(prefix) and len(user_ans) > len(prefix):
+                    is_correct = True
+            elif user_ans.lower() == correct_answer.strip().lower():
+                is_correct = True
+
         if is_correct:
-            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
             await message.channel.send(
                 f"<a:marugame:1556977377601527920> ⭕ 正解！お見事です！ 🎉\n"
                 f"💡 【解説】 \n{quiz_data['explanation']}"
             )
+            update_db_score_async(user_id, message.author.display_name, is_correct, message, member=message.author)
+            if guild_id in server_current_quiz_jh:
+                del server_current_quiz_jh[guild_id]
+            if user_id in user_status_dict:
+                del user_status_dict[user_id]
         else:
-            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
             await message.channel.send(
                 f"不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！\n"
                 f"<:hint:1556661937356546069> 【ヒント】 \n{quiz_data['hint']}"
             )
-        # 修正前：
-        # del server_current_quiz_jh[guild_id]
-        # if user_id in user_status_dict: del user_status_dict[user_id]
-
-        # 修正後（安全装置付き）：
-        if guild_id in server_current_quiz_jh:
-            del server_current_quiz_jh[guild_id]
-        if user_id in user_status_dict:
-            del user_status_dict[user_id]
+            update_db_score_async(user_id, message.author.display_name, is_correct, message, member=message.author)
         return
     # 🛑 中断コマンド
     if message.content in ["!ストップ", "!stop", "!cancel"]:

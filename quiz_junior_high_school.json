@@ -309,6 +309,74 @@
                         "hint": "aren'tやisn'tなどのように、do notも省略形があります。",
                         "id": "JH_E_1_1-10"
                     }
+                },
+                "現在進行形": {
+                    "現在進行形は動詞にingを付けるが、例えばhave+ingの形の時のように動詞の最後の文字を重ねることがある。これは正しい？": {
+                        "answer": "正しくない",
+                        "explanation": "現在進行形は確かに動詞にingを付けますが、haveのように最後の文字が母音の場合は重ねることはありません。しかし例えば、runはrunning、swimはswimmingのように、最後の子音字が母音字の前にある場合に限り、最後の子音字を重ねます。ただし、haveの場合はeをingに変えるので、have→havingとなります。",
+                        "hint": "現在進行形の構造を確認してください。",
+                        "id": "JH_E_1_1-11"
+                    }
+                },
+                "許可・依頼": {
+                    "□□□□ open the door?(意味：私がドアを開けてもいいですか？)という文の、□に入る言葉を答えなさい。": {
+                        "answer": ["Can I", "May I", "Could I", "can I", "may I", "could I", "Can i", "May i", "Could i", "can i", "may i", "could i"],
+                        "explanation": "「Can I open the door?」などは、「私がドアを開けてもいいですか？」という意味です。",
+                        "hint": "許可を求めるときの助動詞を考えてみてください。",
+                        "id": "JH_E_1_1-12"
+                    },
+                    "□□□□□□□ open the door?(意味：ドアを開けてもらえますか？)という文の、□に入る言葉を答えなさい。": {
+                        "answer": ["Can You", "Would You", "Could You", "can You", "would You", "could You", "Can you", "Would you", "Could you", "can you", "would you", "could you"],
+                        "explanation": "「Can You open the door?」などは、「ドアを開けてもらえますか？」という意味です。",
+                        "hint": "依頼をする時の助動詞を考えてみてください。",
+                        "id": "JH_E_1_1-13"
+                    }
+                },
+                "比較文": {
+                    "次の単語たちを並び替えて英文を作りなさい。 「Sushi do Which you like, or ? Yakisoba」": {
+                        "answer": ["Which do you like, Sushi or Yakisoba?","Which do you like, Yakisoba or Sushi?"],
+                        "explanation": "Which do you like, Sushi or Yakisoba? または Which do you like, Yakisoba or Sushi? が比較として正しい英文です。",
+                        "hint": "順不同です。回答するときは大文字小文字に気を付けて！",
+                        "id": "JH_E_1_1-14"
+                    }
+                },
+                "命令文": {
+                    "Beから始まる命令文を一つ書きなさい。": {
+                        "answer": [
+                            "STARTSWITH:Be "
+                        ],
+                        "explanation": "Beから始まる命令文は、相手に対して何かをするように指示する文です。例えば、「Be quiet.」は「静かにしなさい。」という意味です。",
+                        "hint": "命令文では、主語は省略されることが多いです。Beから始まる文を思い浮かべてみましょう。",
+                        "id": "JH_E_1_1-19"
+                    }
+                }
+            },
+            "単語": {
+                "代名詞": {
+                    "「私を」や「私に」という意味を持つ代名詞は？": {
+                        "answer": "me",
+                        "explanation": "「私を」や「私に」という意味を持つ代名詞は「me」です。",
+                        "hint": "主語ではなく、目的語として使われる代名詞です。",
+                        "id": "JH_E_1_1-15"
+                    },
+                    "「私たちのもの」という意味を持つ代名詞は？": {
+                        "answer": "ours",
+                        "explanation": "「私たちのもの」という意味を持つ代名詞は「ours」です。",
+                        "hint": "whose ~?という疑問文の答えに使われます。",
+                        "id": "JH_E_1_1-16"
+                    },
+                    "「彼の」「彼女の」「それらの」という意味を持つ代名詞は？": {
+                        "answer": "their",
+                        "explanation": "「彼の」「彼女の」「それらの」という意味を持つ代名詞は「their」です。",
+                        "hint": "所有格の代名詞です。",
+                        "id": "JH_E_1_1-17"
+                    },
+                    "「それは」「それが」という意味を持つ代名詞は？": {
+                        "answer": "it",
+                        "explanation": "「それは」「それが」という意味を持つ代名詞は「it」です。",
+                        "hint": "単数の物や動物を指すときに使われます。",
+                        "id": "JH_E_1_1-18"
+                    }
                 }
             }
         }
