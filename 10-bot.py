@@ -628,8 +628,6 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
         await interaction.response.send_message("⚠️ 現在クイズが出題中、または選択処理中です。解答するか `!ストップ` してください。", ephemeral=True)
         return
 
-    await interaction.response.defer()
-
     if mode == "general":
         if not quiz_dictionary:
             await interaction.followup.send("一般クイズのデータが空、または読み込めていません。")
