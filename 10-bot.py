@@ -186,7 +186,10 @@ class AcademicQuizButton(discord.ui.Button):
         self.view_obj = view_obj
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        try:
+            await interaction.response.defer()
+        except discord.NotFound:
+            return
         await self.view_obj.process_choice(interaction, self.label)
 
 
@@ -245,7 +248,10 @@ class MultiChoiceQuizButton(discord.ui.Button):
         self.view_obj = view_obj
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        try:
+            await interaction.response.defer()
+        except discord.NotFound:
+            return
         await self.view_obj.process_choice(interaction, self)
 
 
@@ -603,6 +609,14 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
     global server_current_quiz, server_current_quiz_jh, server_current_quiz_academic, user_status_dict
     guild_id = interaction.guild.id if interaction.guild else 0
     user_id = interaction.user.id
+
+    # slash_quiz の冒頭
+    try:
+        await interaction.response.defer()
+    except discord.NotFound:
+        # サーバー遅延で3秒過ぎた場合はエラーを出さずに終了
+        return
+
 
     if interaction.guild:
         target_ids = server_settings.get(str(guild_id), {}).get("quiz_channel_ids", [])
