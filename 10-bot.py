@@ -514,10 +514,15 @@ async def slash_help(interaction: discord.Interaction):
         inline=False
     )
     embed.add_field(
-        name="🚀 運営・サーバー管理者機能",
+        name="🛠️ サーバー管理者・運営専用コマンド",
         value=(
-            "• `/運営申請` : Bot全体の「運営スタッフ」への応募フォームを開きます（創設者の承認制）\n"
-            "• `!admin` : **サーバー管理者認証**（6桁パスワード認証で、そのサーバーのクイズ専用チャンネル設定などが可能になります）"
+            "**【サーバー管理者用】**（※`!admin` 認証またはサーバー管理者権限が必要）\n"
+            "• `!add-quiz-channel` : このチャンネルをクイズ専用チャンネルに登録\n"
+            "• `!remove-quiz-channel` : このチャンネルのクイズ専用登録を解除\n"
+            "• `!rank-toggle` : クイズ役職の自動昇進システムのオン・オフ切替\n"
+            "**【Bot運営専用】**\n"
+            "• `!supabase-table(quiz_score)` : 全ユーザーの成績ランキング表とSupabase管理画面を表示\n"
+            "• `!github-repositories` : ソースコードのリポジトリURLを表示"
         ),
         inline=False
     )
