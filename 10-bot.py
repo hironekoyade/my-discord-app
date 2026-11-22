@@ -239,9 +239,11 @@ class AcademicQuizView(discord.ui.View):
             )
             update_db_score_async(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
         else:
-            update_db_score(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
-            await interaction.channel.send(f"😢 {interaction.user.mention} **不正解です...。もう一度挑戦してみてください！**")
-            await interaction.channel.send(f"正解は **【 {self.correct_answer} 】** でした！")
+            await interaction.channel.send(
+                f"😢 {interaction.user.mention} **不正解です...。もう一度挑戦してみてください！**\n"
+                f"正解は **【 {self.correct_answer} 】** でした！"
+            )
+            update_db_score_async(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
 
         global server_current_quiz, server_current_quiz_jh, server_current_quiz_academic, user_status_dict
         g_id = interaction.guild.id if interaction.guild else 0
@@ -316,19 +318,16 @@ class MultiChoiceQuizView(discord.ui.View):
         user_choices = [btn.label for btn in self.selected_buttons]
         is_all_correct = all(ans in user_choices for ans in self.correct_answers)
 
-        def update_db_score_async(user_id: int, username: str, is_correct: bool, message: discord.Message = None, member: discord.Member = None):
-            asyncio.create_task(
-        asyncio.to_thread(update_db_score, user_id, username, is_correct, message, member)
-    )
-
         if is_all_correct:
-            update_db_score(user_id, interaction.user.display_name, True, interaction.message, member=interaction.user)
-            await interaction.channel.send(f"💡 {interaction.user.mention} **大正解！2つの選択肢を完璧に見抜きました！🎉**")
-            await interaction.channel.send(f'<:hint:1556661937356546069> 【解説】\n{self.explanation}')
+            await interaction.channel.send(
+                f"💡 {interaction.user.mention} **大正解！2つの選択肢を完璧に見抜きました！🎉**\n"
+                f"<:hint:1556661937356546069> 【解説】\n{self.explanation}"
+            )
+            update_db_score_async(user_id, interaction.user.display_name, True, interaction.message, member=interaction.user)
         else:
-            update_db_score(user_id, interaction.user.display_name, False, interaction.message, member=interaction.user)
             correct_text = " と ".join([f"【{a}】" for a in self.correct_answers])
             await interaction.channel.send(f"😢 {interaction.user.mention} **残念、不正解です...。**\n正解は {correct_text} でした！")
+            update_db_score_async(user_id, interaction.user.display_name, False, interaction.message, member=interaction.user)
         
         global server_current_quiz, server_current_quiz_jh, server_current_quiz_academic, user_status_dict
         g_id = interaction.guild.id if interaction.guild else 0
@@ -500,13 +499,26 @@ async def slash_help(interaction: discord.Interaction):
             "• `一般クイズ` : 誰でも解ける一般知識問題\n"
             "• `学術クイズ` : ボタンで答える高度な専門クイズ\n"
             "• `中学クイズメニュー` : 学年・教科・単元をチャットで選んで出題\n"
-            "• `中学クイズおまかせ` : 中学生の全範囲から完全ランダム出題"
+            "• `中学クイズおまかせ` : 中学生の全範囲から完全ランダム出題\n"
+            "• `!ストップ` : 出題中のクイズやメニュー選択を中断します"
         ),
         inline=False
     )
     embed.add_field(
-        name="🚀 運営機能 `/運営申請`",
-        value="• 申請フォームを送信し、創設者に承認されることで「運営」リストへ登録されます。",
+        name="📊 成績・ランク確認コマンド",
+        value=(
+            "• `!quiz_score` : 自分の正解数・正答率を確認\n"
+            "• `!ランク条件` : 累計正解数でもらえる役職一覧を表示\n"
+            "• `!myrank-toggle` : 自分の役職自動付与のオン・オフ切替"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="🚀 運営・サーバー管理者機能",
+        value=(
+            "• `/運営申請` : Bot全体の「運営スタッフ」への応募フォームを開きます（創設者の承認制）\n"
+            "• `!admin` : **サーバー管理者認証**（6桁パスワード認証で、そのサーバーのクイズ専用チャンネル設定などが可能になります）"
+        ),
         inline=False
     )
     embed.add_field(
@@ -628,15 +640,14 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
         # サーバー遅延で3秒過ぎた場合はエラーを出さずに終了
         return
 
-
     if interaction.guild:
         target_ids = server_settings.get(str(guild_id), {}).get("quiz_channel_ids", [])
         if target_ids and (interaction.channel_id not in target_ids):
-            await interaction.response.send_message("❌ このチャンネルでのクイズの実行は許可されていません。", ephemeral=True)
+            await interaction.followup.send("❌ このチャンネルでのクイズの実行は許可されていません。", ephemeral=True)
             return
 
     if (guild_id in server_current_quiz) or (guild_id in server_current_quiz_jh) or (guild_id in server_current_quiz_academic) or (user_status_dict.get(user_id) in ["quiz_active", "academic_quiz_active"]):
-        await interaction.response.send_message("⚠️ 現在クイズが出題中、または選択処理中です。解答するか `!ストップ` してください。", ephemeral=True)
+        await interaction.followup.send("⚠️ 現在クイズが出題中、または選択処理中です。解答するか `!ストップ` してください。", ephemeral=True)
         return
 
     if mode == "general":
@@ -654,8 +665,9 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
         )
         if isinstance(quiz_data, dict) and quiz_data.get("image_url"):
             embed.set_image(url=quiz_data["image_url"])
+        if isinstance(quiz_data, dict) and quiz_data.get("id"):
+            embed.set_footer(text=f"問題ID: {quiz_data['id']}")
         await interaction.followup.send(embed=embed)
-        if isinstance(quiz_data, dict) and quiz_data.get("id"): embed.set_footer(text=f"問題ID: {quiz_data['id']}")
 
     elif mode == "academic":
         if not quiz_academic:
@@ -677,9 +689,9 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
                 color=discord.Color.green()
             )
             if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
-            await interaction.followup.send(embed=embed, view=view)
             if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
-        elif q_data["type"] == "multi_choice":
+            await interaction.followup.send(embed=embed, view=view)
+        elif q_data["type"] in ["multi_choice", "double_choice"]:
             view = MultiChoiceQuizView(q_data["answer"], q_data["explanation"], q_data["options"])
             embed = discord.Embed(
                 title=f"🔥 【特別クイズ - {chosen_category}】（5択・2つ選択形式）",
@@ -1001,20 +1013,17 @@ async def on_message(message):
 
         if is_correct:
             await message.channel.send(
-                f"<a:marugame:1556977377601527920> ⭕ 正解！お見事です！ 🎉\n"
-                f"💡 【解説】 \n{quiz_data['explanation']}"
+                f"<a:marugame:1556977377601527920> 正解！お見事です（一般知識）！🎉\n"
+                f'<:hint:1556661937356546069> 【解説】\n{quiz_data.get("explanation", "解説はありません。")}'
             )
-            update_db_score_async(user_id, message.author.display_name, is_correct, message, member=message.author)
-            if guild_id in server_current_quiz_jh:
-                del server_current_quiz_jh[guild_id]
-            if user_id in user_status_dict:
-                del user_status_dict[user_id]
         else:
             await message.channel.send(
-                f"不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！\n"
-                f"<:hint:1556661937356546069> 【ヒント】 \n{quiz_data['hint']}"
+                f"不正解です。<:oh_no:1556661209116184686> もう一度挑戦してみてください！\n"
+                f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data.get("hint", "ヒントはありません。")}'
             )
-            update_db_score_async(user_id, message.author.display_name, is_correct, message, member=message.author)
+        update_db_score_async(user_id, message.author.display_name, is_correct, message, member=message.author)
+        if guild_id in server_current_quiz:
+            del server_current_quiz[guild_id]
         return
     # 🛑 中断コマンド
     if message.content in ["!ストップ", "!stop", "!cancel"]:
