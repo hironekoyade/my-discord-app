@@ -39,18 +39,34 @@ ORIGINAL_ADMINS = [
     1446830807007101102
 ]
 
-# 📝 動的に「運営」が増えていくリスト
-ADMIN_USER_ID = ORIGINAL_ADMINS.copy()
+# 📁 運営・サーバー管理者の永続保存システム
+ADMIN_DATA_FILE = "admin_data.json"
 
-# 🔑 パスワード認証を突破した「各サーバーの管理者」を記憶するリスト
-AUTHENTICATED_SERVER_ADMINS = []
+def load_admin_data():
+    if os.path.exists(ADMIN_DATA_FILE):
+        try:
+            with open(ADMIN_DATA_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                # 創設者は必ず含める
+                admins = list(set(ORIGINAL_ADMINS + data.get("admin_user_ids", [])))
+                server_admins = data.get("server_admin_ids", [])
+                return admins, server_admins
+        except Exception as e:
+            print(f"管理者データ読み込みエラー: {e}")
+    return ORIGINAL_ADMINS.copy(), []
 
-try:
-    from dotenv import load_dotenv
-    env_path = Path(__file__).parent / ".env"
-    load_dotenv(dotenv_path=env_path)
-except ImportError:
-    pass
+def save_admin_data():
+    try:
+        with open(ADMIN_DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump({
+                "admin_user_ids": ADMIN_USER_ID,
+                "server_admin_ids": AUTHENTICATED_SERVER_ADMINS
+            }, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"管理者データ保存エラー: {e}")
+
+# 📝 起動時にファイルから復元
+ADMIN_USER_ID, AUTHENTICATED_SERVER_ADMINS = load_admin_data()
 
 from supabase import create_client, Client
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -382,6 +398,7 @@ class AdminReviewView(discord.ui.View):
 
         if self.applicant_id not in ADMIN_USER_ID:
             ADMIN_USER_ID.append(self.applicant_id)
+            save_admin_data()  # ◀ この1行を追加！
 
         for item in self.children:
             item.disabled = True
@@ -486,7 +503,8 @@ async def slash_apply(interaction: discord.Interaction):
     await interaction.response.send_modal(StaffApplyModal())
 
 @tree.command(name="help-hironekobot", description="ひろねこbotのすべてのスラッシュコマンドと使い方の一覧表を表示します。")
-async def slash_help(interaction: discord.Interaction):
+@app_commands.describe(password="【管理者・運営用】裏管理コマンド一覧を表示するためのパスワード（任意）")
+async def slash_help(interaction: discord.Interaction, password: str = None):
     embed = discord.Embed(
         title="🤖 ひろねこbot 新・スラッシュコマンド一覧表",
         description="スラッシュ（`/`）を入力するだけで、スマホからでも簡単に呼び出せるようになりました！",
@@ -514,15 +532,10 @@ async def slash_help(interaction: discord.Interaction):
         inline=False
     )
     embed.add_field(
-        name="🛠️ サーバー管理者・運営専用コマンド",
+        name="🚀 運営・サーバー管理者機能",
         value=(
-            "**【サーバー管理者用】**（※`!admin` 認証またはサーバー管理者権限が必要）\n"
-            "• `!add-quiz-channel` : このチャンネルをクイズ専用チャンネルに登録\n"
-            "• `!remove-quiz-channel` : このチャンネルのクイズ専用登録を解除\n"
-            "• `!rank-toggle` : クイズ役職の自動昇進システムのオン・オフ切替\n"
-            "**【Bot運営専用】**\n"
-            "• `!supabase-table(quiz_score)` : 全ユーザーの成績ランキング表とSupabase管理画面を表示\n"
-            "• `!github-repositories` : ソースコードのリポジトリURLを表示"
+            "• `/運営申請` : Bot全体の「運営スタッフ」への応募フォームを開きます（創設者の承認制）\n"
+            "• `!admin` : **サーバー管理者認証**（6桁パスワード認証で、そのサーバーのクイズ専用チャンネル設定などが可能になります）"
         ),
         inline=False
     )
@@ -536,8 +549,42 @@ async def slash_help(interaction: discord.Interaction):
         ),
         inline=False
     )
-    await interaction.response.send_message(embed=embed)
 
+    is_secret_unlocked = False
+
+    # ▼ パスワードが入力された場合の判定
+    if password is not None:
+        if password == ADMIN_PASSWORD:
+            is_secret_unlocked = True
+            embed.add_field(
+                name="🛠️ 【サーバー管理者専用】設定コマンド",
+                value=(
+                    "（※`!admin` 認証またはサーバー管理者権限が必要）\n"
+                    "• `!add-quiz-channel` : このチャンネルをクイズ専用チャンネルに登録\n"
+                    "• `!remove-quiz-channel` : このチャンネルのクイズ専用登録を解除\n"
+                    "• `!rank-toggle` : クイズ役職の自動昇進システムのオン・オフ切替"
+                ),
+                inline=False
+            )
+            embed.add_field(
+                name="👑 【Bot運営・創設者専用】裏管理コマンド",
+                value=(
+                    "• `!admin-list` : 創設者・運営・認証済みサーバー管理者の一覧とIDを表示\n"
+                    "• `!supabase-table(quiz_score)` : 全ユーザーの成績ランキング表を表示\n"
+                    "• `!github-repositories` : GitHubリポジトリのURLを表示\n"
+                    "• `!admin-remove [ID]` : 指定IDを運営から除外（※創設者専用）\n"
+                    "• `!server-admin-remove [ID]` : 指定IDをサーバー管理者から除外（※創設者専用）\n"
+                    "• `!password-reset` : 6桁パスワードを強制リセット（※創設者専用）"
+                ),
+                inline=False
+            )
+        else:
+            await interaction.response.send_message("❌ パスワードが違います。", ephemeral=True)
+            return
+
+    # パスワード認証で開いた場合は、他の人に見えないよう ephemeral=True で送信する
+    await interaction.response.send_message(embed=embed, ephemeral=is_secret_unlocked)
+    
 @tree.command(name="占い", description="今日または明日の運勢、ラッキーカラーやアイテムを占います！")
 @app_commands.describe(day="占いたい日を選択してください")
 @app_commands.choices(day=[
@@ -877,6 +924,7 @@ async def on_message(message):
                         if self.pwd_input.value == ADMIN_PASSWORD:
                             if modal_interaction.user.id not in AUTHENTICATED_SERVER_ADMINS:
                                 AUTHENTICATED_SERVER_ADMINS.append(modal_interaction.user.id)
+                                save_admin_data()  # ◀ この1行を追加！
                             await modal_interaction.response.send_message("✅ パスワード認証に成功しました！このサーバー内での設定変更コマンドが許可されます。", ephemeral=True)
                         else:
                             await modal_interaction.response.send_message("❌ パスワードが違います。", ephemeral=True)
@@ -884,7 +932,45 @@ async def on_message(message):
         await message.channel.send("以下のボタンを押して、サーバー管理者用のパスワードを入力してください！", view=AuthButtonView())
         return
 
-    # 👑 特定のユーザーを「運営」リストから除外するコマンド（創創者専用）
+    # 📋 運営・サーバー管理者の一覧表示コマンド（運営以上が実行可能）
+    if message.content == "!admin-list":
+        if user_id in ADMIN_USER_ID:
+            embed = discord.Embed(
+                title="👑 ひろねこbot 権限保持者一覧",
+                color=discord.Color.gold()
+            )
+            
+            # 創設者リスト
+            creator_lines = []
+            for uid in ORIGINAL_ADMINS:
+                u = client.get_user(uid)
+                name = u.display_name if u else "不明なユーザー"
+                creator_lines.append(f"• {name} (`{uid}`)")
+            embed.add_field(name="👑 創設者（最高権限）", value="\n".join(creator_lines) or "なし", inline=False)
+
+            # 運営リスト（創設者を除く）
+            staff_ids = [uid for uid in ADMIN_USER_ID if uid not in ORIGINAL_ADMINS]
+            staff_lines = []
+            for uid in staff_ids:
+                u = client.get_user(uid)
+                name = u.display_name if u else "不明なユーザー"
+                staff_lines.append(f"• {name} (`{uid}`)")
+            embed.add_field(name="🛡️ Bot運営スタッフ", value="\n".join(staff_lines) or "なし", inline=False)
+
+            # 認証済みサーバー管理者リスト
+            s_admin_lines = []
+            for uid in AUTHENTICATED_SERVER_ADMINS:
+                u = client.get_user(uid)
+                name = u.display_name if u else "不明なユーザー"
+                s_admin_lines.append(f"• {name} (`{uid}`)")
+            embed.add_field(name="🔑 認証済みサーバー管理者", value="\n".join(s_admin_lines) or "なし", inline=False)
+
+            await message.channel.send(embed=embed)
+        else:
+            await message.channel.send("❌ エラー：このコマンドはBotの【運営メンバー】のみが実行できます。")
+        return
+
+    # 👑 特定のユーザーを「運営」リストから除外するコマンド（創設者専用）
     if message.content.startswith("!admin-remove"):
         if message.author.id in ORIGINAL_ADMINS:
             args = message.content.split()
@@ -898,9 +984,31 @@ async def on_message(message):
                     return
                 if target_id in ADMIN_USER_ID:
                     ADMIN_USER_ID.remove(target_id)
-                    await message.channel.send(f"👑 ユーザーID: `{target_id}` を運営リストから削除しました。")
+                    save_admin_data()
+                    await message.channel.send(f"👑 ユーザーID: `{target_id}` を運営リストから削除し、保存しました。")
                 else:
                     await message.channel.send("⚠️ そのユーザーは運営リストに登録されていません。")
+            except ValueError:
+                await message.channel.send("❌ 正しいユーザーIDを数値で入力してください。")
+        else:
+            await message.channel.send("❌ エラー：このコマンドはBotの【創設者】のみが実行できます。")
+        return
+
+    # 🔑 特定のユーザーを「認証済みサーバー管理者」リストから除外するコマンド（創設者専用）
+    if message.content.startswith("!server-admin-remove"):
+        if message.author.id in ORIGINAL_ADMINS:
+            args = message.content.split()
+            if len(args) < 2:
+                await message.channel.send("❌ 使用方法: `!server-admin-remove [ユーザーID]`")
+                return
+            try:
+                target_id = int(args[1])
+                if target_id in AUTHENTICATED_SERVER_ADMINS:
+                    AUTHENTICATED_SERVER_ADMINS.remove(target_id)
+                    save_admin_data()
+                    await message.channel.send(f"🔑 ユーザーID: `{target_id}` を認証済みサーバー管理者リストから削除し、保存しました。")
+                else:
+                    await message.channel.send("⚠️ そのユーザーはサーバー管理者リストに登録されていません。")
             except ValueError:
                 await message.channel.send("❌ 正しいユーザーIDを数値で入力してください。")
         else:
@@ -954,7 +1062,11 @@ async def on_message(message):
         return
 
     # 🚧 専用チャンネルのガード処理
-    is_admin_command = message.content in ["!admin", "!password-reset", "!github-repositories", "!supabase-table(quiz_score)", "!rank-toggle", "!add-quiz-channel", "!remove-quiz-channel", "!admin-remove"]
+    is_admin_command = (
+        message.content in ["!admin", "!password-reset", "!github-repositories", "!supabase-table(quiz_score)", "!rank-toggle", "!add-quiz-channel", "!remove-quiz-channel", "!admin-list"]
+        or message.content.startswith("!admin-remove")
+        or message.content.startswith("!server-admin-remove")
+    )
     is_general_command = message.content.startswith("!") and (not is_admin_command)
     is_currently_answering = (guild_id in server_current_quiz or guild_id in server_current_quiz_jh or guild_id in server_current_quiz_academic or user_id in user_status_dict)
 
