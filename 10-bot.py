@@ -1102,7 +1102,7 @@ async def on_message(message):
         if target_channel_ids and (message.channel.id not in target_channel_ids):
             return 
 
-    # 🛑 中断コマンド（どのクイズの解答判定よりも一番最初にチェックする！）
+    # 🛑 中断コマンド（一番最初にチェック）
     if message.content in ["!ストップ", "!stop", "!cancel"]:
         if guild_id in server_current_quiz: del server_current_quiz[guild_id]
         if guild_id in server_current_quiz_jh: del server_current_quiz_jh[guild_id]
@@ -1115,13 +1115,11 @@ async def on_message(message):
         await message.channel.send("🛑 クイズ・メニュー選択を中断してリセットしました！")
         return
 
-    # 1. 一般知識クイズのチャット解答判定
+    # 1. 一般知識クイズのチャット解答判定（左端をスペース4つに揃える）
     if guild_id in server_current_quiz and server_current_quiz[guild_id] is not None:
-        # ▼ pop() で取り出すと同時に削除し、2回目以降や連投での無限稼ぎを完全に防ぐ
         chosen_quiz = server_current_quiz.pop(guild_id, None)
         if chosen_quiz is None:
             return
-
         quiz_data = quiz_dictionary.get(chosen_quiz, {})
         correct_answer = quiz_data.get("answer", "")
         
@@ -1146,6 +1144,55 @@ async def on_message(message):
                 f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data.get("hint", "ヒントはありません。")}'
             )
         update_db_score_async(user_id, message.author.display_name, is_correct, message, member=message.author)
+        return
+
+    # 2. 中学クイズのチャット解答判定（上の if と左端をぴったり揃える！）
+    elif (user_status_dict.get(user_id) == "quiz_active" and guild_id in server_current_quiz_jh):
+        quiz_data = server_current_quiz_jh[guild_id]
+        if quiz_data.get("type", "text") != "text":
+            return
+        correct_answer = quiz_data["answer"]
+        is_correct = False
+        user_ans = message.content.strip()
+
+        if isinstance(correct_answer, list):
+            for ans in correct_answer:
+                if ans.startswith("STARTSWITH:"):
+                    prefix = ans.replace("STARTSWITH:", "").lower()
+                    if user_ans.lower().startswith(prefix) and len(user_ans) > len(prefix):
+                        is_correct = True
+                        break
+                elif user_ans.lower() == ans.strip().lower():
+                    is_correct = True
+                    break
+        else:
+            if correct_answer.startswith("STARTSWITH:"):
+                prefix = correct_answer.replace("STARTSWITH:", "").lower()
+                if user_ans.lower().startswith(prefix) and len(user_ans) > len(prefix):
+                    is_correct = True
+            elif user_ans.lower() == correct_answer.strip().lower():
+                is_correct = True
+
+        if is_correct:
+            exp_embed = discord.Embed(
+                title="⭕ 正解！お見事です！ 🎉",
+                description=f"💡 **【解説】**\n{quiz_data['explanation']}",
+                color=discord.Color.green()
+            )
+            if quiz_data.get("explanation_image_url"):
+                exp_embed.set_image(url=quiz_data["explanation_image_url"])
+            await message.channel.send(content="<a:marugame:1556977377601527920>", embed=exp_embed)
+            update_db_score_async(user_id, message.author.display_name, is_correct, message, member=message.author)
+            if guild_id in server_current_quiz_jh:
+                del server_current_quiz_jh[guild_id]
+            if user_id in user_status_dict:
+                del user_status_dict[user_id]
+        else:
+            await message.channel.send(
+                f"不正解です... <:oh_no:1556661209116184686> もう一度挑戦してみてください！\n"
+                f"<:hint:1556661937356546069> 【ヒント】 \n{quiz_data['hint']}"
+            )
+            update_db_score_async(user_id, message.author.display_name, is_correct, message, member=message.author)
         return
     
     # 📋 中学クイズ：段階的メニュー選択処理
