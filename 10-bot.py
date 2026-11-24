@@ -1075,6 +1075,8 @@ async def on_message(message):
             if isinstance(quiz_data, dict) and quiz_data.get("explanation_image_url"):
                 exp_embed.set_image(url=quiz_data["explanation_image_url"])
             await message.channel.send(content="<a:marugame:1556977377601527920>", embed=exp_embed)
+            # ▼ 正解したときだけデータを消す！
+            server_current_quiz.pop(guild_id, None)
         else:
             await message.channel.send(
                 f"不正解です。<:oh_no:1556661209116184686> もう一度挑戦してみてください！\n"
