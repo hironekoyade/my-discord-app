@@ -735,17 +735,17 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
         q_text = random.choice(list(category_quizzes.keys()))
         q_data = category_quizzes[q_text]
         
+        q_type = q_data.get("type", "choice")
         server_current_quiz_academic[guild_id] = q_data
         user_status_dict[user_id] = "academic_quiz_active"
 
-        if q_data["type"] == "choice":
-            # 中学クイズ側の呼び出し例
+        if q_type == "choice":
             view = AcademicQuizView(
-            q_data["answer"],
-            q_data.get("explanation", "解説はありません。"),
-            q_data["options"],
-            "中学クイズ",
-            q_data.get("explanation_image_url")
+                q_data["answer"],
+                q_data["explanation"],
+                q_data["options"],
+                "学術クイズ",
+                q_data.get("explanation_image_url")
             )
             embed = discord.Embed(
                 title=f"🎯 【クイズ - {chosen_category}】（4択ボタン形式）",
@@ -755,13 +755,9 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
             if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
             if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
             await interaction.followup.send(embed=embed, view=view)
-        elif q_data["type"] in ["multi_choice", "double_choice"]:
-            # 特別クイズ側の呼び出し例
-            view = MultiChoiceQuizView(
-                q_data["answer"],
-                q_data.get("explanation", "解説はありません。"),
-                q_data["options"]
-            )
+
+        elif q_type in ["multi_choice", "double_choice"]:
+            view = MultiChoiceQuizView(q_data["answer"], q_data["explanation"], q_data["options"])
             embed = discord.Embed(
                 title=f"🔥 【特別クイズ - {chosen_category}】（5択・2つ選択形式）",
                 description=f"**問題：{q_text}**\n\n⚠️ **【ルール】ボタンを【2つ】押してください！**",
@@ -771,70 +767,11 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
             if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
             await interaction.followup.send(embed=embed, view=view)
 
-    elif mode == "junior_high":
-        user_status_dict[user_id] = "select_grade"
-        grades = list(quiz_junior_high_school.keys())
-        grades_text = "・".join(grades)
-        await interaction.followup.send(f"📚 **中学クイズメニューを開きました。**\n**どの学年の問題に挑戦しますか？**\nチャット欄に「{grades_text}」のいずれかを直接入力して送信してください！")
-
-    elif mode == "junior_high_random":
-        if not quiz_junior_high_school:
-            await interaction.followup.send("中学クイズのデータが空、または読み込めていません。")
-            return
-        all_questions = []
-        for gd, sbs in quiz_junior_high_school.items():
-            for sb, rgs in sbs.items():
-                for rg, cts in rgs.items():
-                    for ct, qs in cts.items():
-                        for q_t, q_d in qs.items():
-                            all_questions.append({"text": q_t, "data": q_d, "info": f"【{gd} ➔ {sb} ➔ {rg} ➔ {ct}】"})
-        if not all_questions:
-            await interaction.followup.send("登録されている中学クイズの問題が見つかりません。")
-            return
-        chosen = random.choice(all_questions)
-        q_data = chosen["data"]
-        q_type = q_data.get("type", "text")
-        server_current_quiz_jh[guild_id] = q_data 
-        user_status_dict[user_id] = "quiz_active"
-        
-        if q_type == "choice":
-            # 中学クイズ側の呼び出し例
-            view = AcademicQuizView(
-            q_data["answer"],
-            q_data.get("explanation", "解説はありません。"),
-            q_data["options"],
-            "中学クイズ",
-            q_data.get("explanation_image_url")
-            )
-            embed = discord.Embed(
-                title="🎲 中学クイズおまかせ出題（選択式）",
-                description=f"💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**",
-                color=discord.Color.orange()
-            )
-            if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
-            if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
-            await interaction.followup.send(embed=embed, view=view)
-
-        elif q_type in ["multi_choice", "double_choice"]:
-            view = MultiChoiceQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"])
-            embed = discord.Embed(
-                title="🎲 中学クイズおまかせ出題（2つ選択式）",
-                description=f"💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**\n\n⚠️ **【ルール】ボタンを【2つ】押してください！**",
-                color=discord.Color.orange()
-            )
-            if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
-            if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
-            await interaction.followup.send(embed=embed, view=view)
-
         else:
-            embed = discord.Embed(
-                title="🎲 中学クイズおまかせ出題",
-                description=f"💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**",
-                color=discord.Color.orange()
-            )
-            if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
-            if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
-            await interaction.followup.send(embed=embed)
+            # 想定外のtypeだった場合もフリーズさせずに状態リセットして通知する
+            server_current_quiz_academic.pop(guild_id, None)
+            user_status_dict.pop(user_id, None)
+            await interaction.followup.send(f"⚠️ 未対応の問題形式（`{q_type}`）が選ばれました。もう一度 `/クイズ` を実行してください。")
 
 @tree.command(name="ルーレット", description="ボタン式の本格演出ルーレットを開始します！")
 @app_commands.describe(
