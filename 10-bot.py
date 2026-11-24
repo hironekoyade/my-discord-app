@@ -776,13 +776,12 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
             if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
             if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
             await interaction.followup.send(embed=embed)
-
         else:
-            # 想定外のtypeだった場合もフリーズさせずに状態リセットして通知する
             server_current_quiz_academic.pop(guild_id, None)
             user_status_dict.pop(user_id, None)
             await interaction.followup.send(f"⚠️ 未対応の問題形式（`{q_type}`）が選ばれました。もう一度 `/クイズ` を実行してください。")
 
+    # ▼ この2つの elif の左端が、上の elif mode == "academic": と同じ位置（スペース4つ）になっているか確認！
     elif mode == "junior_high":
         user_status_dict[user_id] = "select_grade"
         grades = list(quiz_junior_high_school.keys())
