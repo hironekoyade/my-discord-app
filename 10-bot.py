@@ -767,6 +767,16 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
             if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
             await interaction.followup.send(embed=embed, view=view)
 
+        elif q_type == "text":
+            embed = discord.Embed(
+                title=f"✍️ 【クイズ - {chosen_category}】（記述入力形式）",
+                description=f"**問題：{q_text}**\n\n💬 チャット欄に直接答えを入力して送信してください！",
+                color=discord.Color.green()
+            )
+            if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
+            if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
+            await interaction.followup.send(embed=embed)
+
         else:
             # 想定外のtypeだった場合もフリーズさせずに状態リセットして通知する
             server_current_quiz_academic.pop(guild_id, None)
@@ -1200,7 +1210,40 @@ async def on_message(message):
             )
             update_db_score_async(user_id, message.author.display_name, is_correct, message, member=message.author)
         return
-    
+    # 3. 学術クイズ（記述式）のチャット解答判定
+    elif (user_status_dict.get(user_id) == "academic_quiz_active" and guild_id in server_current_quiz_academic):
+        quiz_data = server_current_quiz_academic[guild_id]
+        if quiz_data.get("type", "choice") != "text":
+            return
+        correct_answer = quiz_data.get("answer", "")
+        is_correct = False
+        user_ans = message.content.strip()
+
+        if isinstance(correct_answer, list):
+            if any(user_ans.lower() == str(ans).strip().lower() for ans in correct_answer):
+                is_correct = True
+        else:
+            if user_ans.lower() == str(correct_answer).strip().lower():
+                is_correct = True
+
+        if is_correct:
+            exp_embed = discord.Embed(
+                title="⭕ 正解！お見事です（学術クイズ）！🎉",
+                description=f'<:hint:1556661937356546069> **【解説】**\n{quiz_data.get("explanation", "解説はありません。")}',
+                color=discord.Color.green()
+            )
+            if quiz_data.get("explanation_image_url"):
+                exp_embed.set_image(url=quiz_data["explanation_image_url"])
+            await message.channel.send(content="<a:marugame:1556977377601527920>", embed=exp_embed)
+            server_current_quiz_academic.pop(guild_id, None)
+            user_status_dict.pop(user_id, None)
+        else:
+            await message.channel.send(
+                f"😢 不正解です...。もう一度挑戦してみてください！\n"
+                f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data.get("hint", "ヒントはありません。")}'
+            )
+        update_db_score_async(user_id, message.author.display_name, is_correct, message, member=message.author)
+        return
     # 📋 中学クイズ：段階的メニュー選択処理
     current_user_status = user_status_dict.get(user_id)
 
