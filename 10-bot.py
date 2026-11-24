@@ -217,11 +217,12 @@ class AcademicQuizButton(discord.ui.Button):
 
 
 class AcademicQuizView(discord.ui.View):
-    def __init__(self, correct_answer, explanation, options, quiz_name="学術クイズ"):
+    def __init__(self, correct_answer, explanation, options, quiz_name="学術クイズ", explanation_image_url=None):
         super().__init__(timeout=60.0) 
         self.correct_answer = correct_answer
         self.explanation = explanation
         self.quiz_name = quiz_name
+        self.explanation_image_url = explanation_image_url
         
         
         shuffled_options = options.copy()
@@ -249,10 +250,14 @@ class AcademicQuizView(discord.ui.View):
         is_correct = (chosen_label == self.correct_answer)
 
         if is_correct:
-            await interaction.channel.send(
-                f"💡 {interaction.user.mention} **正解！お見事です（{self.quiz_name}）！🎉**\n"
-                f"<:hint:1556661937356546069> 【解説】\n{self.explanation}"
+            exp_embed = discord.Embed(
+                title=f"💡 {interaction.user.display_name} さん、正解！お見事です（{self.quiz_name}）！🎉",
+                description=f"<:hint:1556661937356546069> **【解説】**\n{self.explanation}",
+                color=discord.Color.green()
             )
+            if self.explanation_image_url:
+                exp_embed.set_image(url=self.explanation_image_url)
+            await interaction.channel.send(content=interaction.user.mention, embed=exp_embed)
             update_db_score_async(user_id, interaction.user.display_name, is_correct, interaction.message, member=interaction.user)
         else:
             await interaction.channel.send(
@@ -734,7 +739,14 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
         user_status_dict[user_id] = "academic_quiz_active"
 
         if q_data["type"] == "choice":
-            view = AcademicQuizView(q_data["answer"], q_data["explanation"], q_data["options"])
+            # 中学クイズ側の呼び出し例
+            view = AcademicQuizView(
+            q_data["answer"],
+            q_data.get("explanation", "解説はありません。"),
+            q_data["options"],
+            "中学クイズ",
+            q_data.get("explanation_image_url")
+            )
             embed = discord.Embed(
                 title=f"🎯 【クイズ - {chosen_category}】（4択ボタン形式）",
                 description=f"**問題：{q_text}**",
@@ -744,7 +756,12 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
             if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
             await interaction.followup.send(embed=embed, view=view)
         elif q_data["type"] in ["multi_choice", "double_choice"]:
-            view = MultiChoiceQuizView(q_data["answer"], q_data["explanation"], q_data["options"])
+            # 特別クイズ側の呼び出し例
+            view = MultiChoiceQuizView(
+                q_data["answer"],
+                q_data.get("explanation", "解説はありません。"),
+                q_data["options"]
+            )
             embed = discord.Embed(
                 title=f"🔥 【特別クイズ - {chosen_category}】（5択・2つ選択形式）",
                 description=f"**問題：{q_text}**\n\n⚠️ **【ルール】ボタンを【2つ】押してください！**",
@@ -781,7 +798,14 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
         user_status_dict[user_id] = "quiz_active"
         
         if q_type == "choice":
-            view = AcademicQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"], "中学クイズ")
+            # 中学クイズ側の呼び出し例
+            view = AcademicQuizView(
+            q_data["answer"],
+            q_data.get("explanation", "解説はありません。"),
+            q_data["options"],
+            "中学クイズ",
+            q_data.get("explanation_image_url")
+            )
             embed = discord.Embed(
                 title="🎲 中学クイズおまかせ出題（選択式）",
                 description=f"💡 出題範囲：{chosen['info']}\n\n**問題：{chosen['text']}**",
@@ -1078,73 +1102,7 @@ async def on_message(message):
         if target_channel_ids and (message.channel.id not in target_channel_ids):
             return 
 
-    # 1. 一般知識クイズのチャット解答判定
-    if guild_id in server_current_quiz and server_current_quiz[guild_id] is not None:
-        chosen_quiz = server_current_quiz[guild_id]
-        quiz_data = quiz_dictionary.get(chosen_quiz, {})
-        correct_answer = quiz_data.get("answer", "")
-        
-        is_correct = False
-        if isinstance(correct_answer, list):
-            if message.content in correct_answer: is_correct = True
-        else:
-            if message.content == correct_answer: is_correct = True
-
-        if is_correct:
-            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
-            await message.channel.send("<a:marugame:1556977377601527920> 正解！お見事です（一般知識）！🎉")
-            await message.channel.send(f'<:hint:1556661937356546069> 【解説】\n{quiz_data.get("explanation", "解説はありません。")}')
-        else:
-            update_db_score(user_id, message.author.display_name, is_correct, message, member=message.author)
-            await message.channel.send("不正解です。<:oh_no:1556661209116184686> もう一度挑戦してみてください！")
-            await message.channel.send(f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data.get("hint", "ヒントはありません。")}')
-        del server_current_quiz[guild_id]
-        
-        if guild_id in server_current_quiz:
-            del server_current_quiz[guild_id]
-        return
-    # 2. 中学クイズのチャット解答判定
-    elif (user_status_dict.get(user_id) == "quiz_active" and guild_id in server_current_quiz_jh):
-        quiz_data = server_current_quiz_jh[guild_id]
-        if quiz_data.get("type", "text") != "text":
-            return
-        correct_answer = quiz_data["answer"]
-        is_correct = False
-        user_ans = message.content.strip()
-
-        if isinstance(correct_answer, list):
-            for ans in correct_answer:
-                if ans.startswith("STARTSWITH:"):
-                    prefix = ans.replace("STARTSWITH:", "").lower()
-                    if user_ans.lower().startswith(prefix) and len(user_ans) > len(prefix):
-                        is_correct = True
-                        break
-                elif user_ans.lower() == ans.strip().lower():
-                    is_correct = True
-                    break
-        else:
-            if correct_answer.startswith("STARTSWITH:"):
-                prefix = correct_answer.replace("STARTSWITH:", "").lower()
-                if user_ans.lower().startswith(prefix) and len(user_ans) > len(prefix):
-                    is_correct = True
-            elif user_ans.lower() == correct_answer.strip().lower():
-                is_correct = True
-
-        if is_correct:
-            await message.channel.send(
-                f"<a:marugame:1556977377601527920> 正解！お見事です（一般知識）！🎉\n"
-                f'<:hint:1556661937356546069> 【解説】\n{quiz_data.get("explanation", "解説はありません。")}'
-            )
-        else:
-            await message.channel.send(
-                f"不正解です。<:oh_no:1556661209116184686> もう一度挑戦してみてください！\n"
-                f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data.get("hint", "ヒントはありません。")}'
-            )
-        update_db_score_async(user_id, message.author.display_name, is_correct, message, member=message.author)
-        if guild_id in server_current_quiz:
-            del server_current_quiz[guild_id]
-        return
-    # 🛑 中断コマンド
+    # 🛑 中断コマンド（どのクイズの解答判定よりも一番最初にチェックする！）
     if message.content in ["!ストップ", "!stop", "!cancel"]:
         if guild_id in server_current_quiz: del server_current_quiz[guild_id]
         if guild_id in server_current_quiz_jh: del server_current_quiz_jh[guild_id]
@@ -1155,6 +1113,39 @@ async def on_message(message):
         if user_id in user_selected_range: del user_selected_range[user_id]
         if user_id in user_selected_content: del user_selected_content[user_id]
         await message.channel.send("🛑 クイズ・メニュー選択を中断してリセットしました！")
+        return
+
+    # 1. 一般知識クイズのチャット解答判定
+    if guild_id in server_current_quiz and server_current_quiz[guild_id] is not None:
+        # ▼ pop() で取り出すと同時に削除し、2回目以降や連投での無限稼ぎを完全に防ぐ
+        chosen_quiz = server_current_quiz.pop(guild_id, None)
+        if chosen_quiz is None:
+            return
+
+        quiz_data = quiz_dictionary.get(chosen_quiz, {})
+        correct_answer = quiz_data.get("answer", "")
+        
+        is_correct = False
+        if isinstance(correct_answer, list):
+            if message.content in correct_answer: is_correct = True
+        else:
+            if message.content == correct_answer: is_correct = True
+
+        if is_correct:
+            exp_embed = discord.Embed(
+                title="⭕ 正解！お見事です（一般知識）！🎉",
+                description=f'<:hint:1556661937356546069> **【解説】**\n{quiz_data.get("explanation", "解説はありません。")}',
+                color=discord.Color.blue()
+            )
+            if isinstance(quiz_data, dict) and quiz_data.get("explanation_image_url"):
+                exp_embed.set_image(url=quiz_data["explanation_image_url"])
+            await message.channel.send(content="<a:marugame:1556977377601527920>", embed=exp_embed)
+        else:
+            await message.channel.send(
+                f"不正解です。<:oh_no:1556661209116184686> もう一度挑戦してみてください！\n"
+                f'<:hint:1556661937356546069> 【ヒント】\n{quiz_data.get("hint", "ヒントはありません。")}'
+            )
+        update_db_score_async(user_id, message.author.display_name, is_correct, message, member=message.author)
         return
     
     # 📋 中学クイズ：段階的メニュー選択処理
@@ -1222,7 +1213,14 @@ async def on_message(message):
             user_status_dict[user_id] = "quiz_active"
 
             if q_type == "choice":
-                view = AcademicQuizView(q_data["answer"], q_data.get("explanation", "解説はありません。"), q_data["options"], "中学クイズ")
+                # 中学クイズ側の呼び出し例
+                view = AcademicQuizView(
+                q_data["answer"],
+                q_data.get("explanation", "解説はありません。"),
+                q_data["options"],
+                "中学クイズ",
+                q_data.get("explanation_image_url")
+            )
                 embed = discord.Embed(
                     title="📚 中学クイズ（選択式）",
                     description=f"🎯 出題範囲：{s_grade} ➔ {s_subject} ➔ {s_range} ➔ {content_name}\n\n**問題：{q_text}**",
