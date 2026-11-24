@@ -845,11 +845,6 @@ async def slash_quiz(interaction: discord.Interaction, mode: str):
             if q_data.get("image_url"): embed.set_image(url=q_data["image_url"])
             if q_data.get("id"): embed.set_footer(text=f"問題ID: {q_data['id']}")
             await interaction.followup.send(embed=embed)
-            
-            # 想定外のtypeだった場合もフリーズさせずに状態リセットして通知する
-            server_current_quiz_academic.pop(guild_id, None)
-            user_status_dict.pop(user_id, None)
-            await interaction.followup.send(f"⚠️ 未対応の問題形式（`{q_type}`）が選ばれました。もう一度 `/クイズ` を実行してください。")
 
 @tree.command(name="ルーレット", description="ボタン式の本格演出ルーレットを開始します！")
 @app_commands.describe(
